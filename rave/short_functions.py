@@ -1,3 +1,5 @@
+from .lib import *
+
 ## Brightness functions
 def brightness(r):
     '''Defines the brightness of a particle as a function of distance from the star ("brightness function"). 

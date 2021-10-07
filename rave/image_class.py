@@ -1,3 +1,10 @@
+from .lib import *
+from .short_functions import *
+from .height_functions import *
+from .ring_functions import *
+from .linecut_functions import *
+
+
 class Image():
     '''Use this class to fit to an observation. '''
     
@@ -31,7 +38,7 @@ class Image():
         # Dimensions
         self.ydim, self.xdim = self.image.shape # pixels
         self.cx, self.cy = self.xdim//2, self.ydim//2 # pixels
-        if self.cx % 2 != 0 or self.cy % 2 != 0:
+        if self.xdim % 2 != 0 or self.ydim % 2 != 0:
             print('Image dimensions not even')
         self.dim = self.xdim
         
@@ -54,13 +61,13 @@ class Image():
     def add_flip(self, rotate=True):
         '''Sums the image and kernel with their repestive 180-degree rotated images'''
         if rotate:
-            image.image = (image.image + rotate180(image.image)) / 2
-            image.kernel = (image.kernel + rotate180(image.kernel)) / 2
+            self.image = (self.image + rotate180(self.image)) / 2
+            self.kernel = (self.kernel + rotate180(self.kernel)) / 2
         else:
-            image.image = (image.image + np.fliplr(image.image)) / 2
-            image.kernel = (image.kernel + np.fliplr(image.kernel)) / 2
-        image.initialise()
-        image.flipped = True
+            self.image = (self.image + np.fliplr(self.image)) / 2
+            self.kernel = (self.kernel + np.fliplr(self.kernel)) / 2
+        self.initialise()
+        self.flipped = True
     
     def smooth(self, sigma=2):
         '''Smoothes the image and kernel with a circular Gaussian kernel with a standard deviation of SIGMA'''
@@ -180,11 +187,13 @@ class Image():
             cx2 /= self.beam_fwhm
             cy2 /= self.beam_fwhm
             unit_label = 'beam FWHMs'
-        plot(self.image, extent=[-cx2, cx2, -cy2, cy2])
-        #plt.tight_layout()
+        plt.figure()
+        plt.imshow(self.image, extent=[-cx2, cx2, -cy2, cy2], origin='lower')
         
         plt.xlabel(f'Relative RA ({unit_label})')
         plt.ylabel(f'Relative Dec ({unit_label})')
+        #plt.tight_layout()
+        plt.show()
     
     def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None):
         '''Makes a model of the image.
@@ -282,8 +291,8 @@ class Image():
         plt.plot(r, lim, label='Data')
         
         while inc_range[1] - inc_range[0] > 2:
-            image.make_model(inclination=guess, heights=0, add_before_convolve=True)
-            lmod = make_linecut(image.model.image, cut_height)
+            self.make_model(inclination=guess, heights=0, add_before_convolve=True)
+            lmod = make_linecut(self.model.image, cut_height)
             lmod = meanlr(lmod)
             plt.plot(r, lmod, label=guess)
             
@@ -295,6 +304,40 @@ class Image():
         
         print('Lower bound for inclination:', inc_range)
         self.inclination = inc_range[1]
+        
+        plt.xlabel(f'Radial distance ({unit_label})')
+        plt.ylabel('Midplane flux')
+        plt.legend(frameon=False)
+        plt.tight_layout()
+        plt.show()
+    
+    def estimate_inclination(self, cut_height=10, inc_range=[78, 90], di=2, unit='pixel'):
+        '''Finds a lower bound for the inclination.
+        Must have already fitted SELF.RADIAL.PROFILE.'''
+        
+        if unit == 'pixel':
+            r = np.arange(self.cx)
+            unit_label = 'pixels'
+        elif use_au == True:
+            r = np.arange(self.cx) * self.image.scale
+            unit_label = 'au'
+        elif use_au == 'beam':
+            assert self.beam_fwhm != None
+            r = np.arange(self.cx) / self.beam_fwhm
+            unit_label = 'beam FWHMs'
+        
+        lim = make_linecut(self.image, cut_height)
+        lim = meanlr(lim)
+        plt.figure()
+        plt.plot(r, lim, label='Data')
+        
+        inc_vals = np.arange(inc_range[0], inc_range[1]+di, di)
+        
+        for inc in inc_vals:
+            self.make_model(inclination=inc, heights=0, add_before_convolve=True)
+            lmod = make_linecut(self.model.image, cut_height)
+            lmod = meanlr(lmod)
+            plt.plot(r, lmod, label=inc)
         
         plt.xlabel(f'Radial distance ({unit_label})')
         plt.ylabel('Midplane flux')
@@ -587,7 +630,7 @@ class RadialProfile():
         for i in range(n_iterations):
             
             # Print status
-            if verbose: print(i)
+            if verbose: print(i, end=' ')
             
             # Make annuli
             r_bounds = self.R_BOUNDS[i]
@@ -620,7 +663,7 @@ class RadialProfile():
             if not extra_noise: continue
             
             # Print status
-            if verbose: print('n', i)
+            if verbose: print('n', i, end=' ')
             
             # Make annuli
             r_bounds = self.R_BOUNDS[i]
@@ -816,7 +859,7 @@ class HeightProfile():
         height_calibrators, part_generators = make_generators(r_bounds, self.interp_heights, self.image.xdim, self.RAPID_RINGS, self.image.kernel, cut_height)
         
         # Fit height
-        self.image.part = make_linecut(image.image, cut_height)
+        self.image.part = make_linecut(self.image.image, cut_height)
         self.lim = bin_linecut(self.image.part, r_bounds)
         H, lmod = fit_height(self.lim, mtxratios, r_bounds, height_calibrators, part_generators, starting_height, self.image.xdim)
             
@@ -953,7 +996,7 @@ class HeightProfile():
         for i in range(n_iterations):
             
             # Print status
-            if verbose >= 1: print(i)
+            if verbose >= 1: print(i, end=' ')
             
             # Get annuli boundaries
             r_bounds = self.R_BOUNDS[i]
@@ -995,7 +1038,7 @@ class HeightProfile():
             if not extra_noise: continue
             
             # Print status
-            if verbose: print('n', i)
+            if verbose: print('n', i, end=' ')
             
             # Get annuli boundaries
             r_bounds = self.R_BOUNDS[i]

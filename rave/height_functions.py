@@ -1,3 +1,9 @@
+from .lib import *
+from .short_functions import *
+from .ring_functions import *
+from .linecut_functions import *
+
+
 ## Height calibrator and part generator
 def make_generators(r_bounds, interp_heights, dim, RAPID_RINGS, kernel, cut_height=10, testing=True):
     '''This is run in preparation for FIT_HEIGHT2. 

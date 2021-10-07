@@ -1,3 +1,8 @@
+from .lib import *
+from .short_functions import *
+from .linecut_functions import *
+
+
 ## Making rings
 def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, kernel=None, n_points_per_pixel=200):
     '''Returns an image of a ring (equivalently called an annulus). 
@@ -129,7 +134,7 @@ def make_all_rings(r_bounds, heights, inclination, dim, n_points_per_pixel=200, 
     # Make rings
     for iring in range(nrings-1, -1, -1):
         if verbose:
-            print(iring, sep='')
+            print(iring, sep='', end=' ')
         ring_image = make_ring(R_per_ring[iring], None, None, heights[iring], inclination, dim, kernel, n_points_per_pixel)
         all_ring_images[iring] = ring_image
     
