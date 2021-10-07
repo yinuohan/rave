@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 #HERE = pathlib.Path(__file__).parent
 
-VERSION = '1.0.0'
+VERSION = '0.1.2'
 PACKAGE_NAME = 'rave'
 AUTHOR = 'Yinuo Han'
 AUTHOR_EMAIL = 'yh458@cam.ac.uk'
@@ -18,8 +18,6 @@ INSTALL_REQUIRES = [
       'numpy',
       'matplotlib',
       'astropy',
-      'os',
-      'time',
       'scipy',
 ]
 
