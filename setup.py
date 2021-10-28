@@ -10,7 +10,7 @@ AUTHOR_EMAIL = 'yh458@cam.ac.uk'
 URL = 'https://github.com/yinuohan/Rave'
 
 LICENSE = 'GNU AFFERO GENERAL PUBLIC LICENSE 3.0'
-DESCRIPTION = 'Modelling the structure of edge-on debris disk.'
+DESCRIPTION = 'Modelling the structure of edge-on debris disks.'
 #LONG_DESCRIPTION = (HERE / "README.md").read_text()
 LONG_DESC_TYPE = "text/markdown"
 

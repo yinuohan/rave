@@ -4,7 +4,7 @@ from .height_functions import *
 from .ring_functions import *
 from .linecut_functions import *
 
-
+## Image class
 class Image():
     '''Use this class to fit to an observation. '''
     
@@ -57,6 +57,8 @@ class Image():
             self.add_blur = 0
         if not hasattr(self, 'flipped'):
             self.flipped = False
+        if not hasattr(self, 'convolve_noise'):
+            self.convolve_noise = False
     
     def add_flip(self, rotate=True):
         '''Sums the image and kernel with their repestive 180-degree rotated images'''
@@ -93,13 +95,14 @@ class Image():
             self.image[self.cy + self.y_max: ] = 0
         
     
-    def noise_by_snr(self, snr_per_beam, beam_fwhm, mode='add'):
+    def noise_by_snr(self, snr_per_beam, beam_fwhm, mode='add', convolve_noise=False):
         '''Calculates noise/pixel and noise/beam given snr/beam and beam_fwhm.
         MODE can be "add" or "specify".
             If MODE is 'SPECIFY', then only perform noise calculation.
             If MODE is 'ADD', then add this amount of noise to the image. '''
         self.snr_per_beam = snr_per_beam
         self.beam_fwhm = beam_fwhm
+        self.convolve_noise = convolve_noise
         
         # Number of beams required to cover the disk
         self.beam_area = calculate_beam_area(beam_fwhm, beam_fwhm)
@@ -114,18 +117,25 @@ class Image():
         self.noise_per_beam = flux_per_beam / self.snr_per_beam
         
         # RMS noise per pixel
-        self.noise_per_pixel = self.noise_per_beam / np.sqrt(self.beam_area)
+        if convolve_noise:
+            slope = calibrate_noise(self.kernel, beam_fwhm, beam_fwhm, verbose=False, plotit=False)
+            self.noise_per_pixel = self.noise_per_beam / slope
+            self.slope = slope
+        else:
+            self.noise_per_pixel = self.noise_per_beam / np.sqrt(self.beam_area)
         
         # Add noise
         if mode == 'add':
             if self.noise_per_pixel > 0:
                 noise = np.random.normal(0, self.noise_per_pixel, self.image.shape)
+                if self.convolve_noise:
+                    noise = convolve(noise, self.kernel)
                 self.image += noise
         
         self.kernel_noise = 0
         self.initialise()
     
-    def noise_by_rms(self, image_noise, beam_fwhm=None, reference_area='pixel', mode='add'):
+    def noise_by_rms(self, image_noise, beam_fwhm=None, reference_area='pixel', mode='add', convolve_noise=False):
         '''Calculates snr/beam given (noise/pixel or noise/beam) and  beam_fwhm.
         REFERENCE_AREA can be "pixel" or "beam". 
         MODE can be "add" or "specify".
@@ -133,6 +143,7 @@ class Image():
             If MODE is 'ADD', then add this amount of noise to the image.'''
         
         self.beam_fwhm = beam_fwhm
+        self.convolve_noise = convolve_noise
         
         if self.beam_fwhm:
             # Number of beams required to cover the disk
@@ -151,7 +162,12 @@ class Image():
             else:
                 assert reference_area == 'beam'
                 self.noise_per_beam = image_noise
-                self.noise_per_pixel = self.noise_per_beam / np.sqrt(self.beam_area)
+                if convolve_noise:
+                    slope = calibrate_noise(self.kernel, beam_fwhm, beam_fwhm, verbose=False, plotit=False)
+                    self.noise_per_pixel = self.noise_per_beam / slope
+                    self.slope = slope
+                else:
+                    self.noise_per_pixel = self.noise_per_beam / np.sqrt(self.beam_area)
             
             # SNR per beam
             self.snr_per_beam = flux_per_beam / self.noise_per_beam
@@ -164,6 +180,8 @@ class Image():
         if mode == 'add':
             if self.noise_per_pixel > 0:
                 noise = np.random.normal(0, self.noise_per_pixel, self.image.shape)
+                if self.convolve_noise:
+                    noise = convolve(noise, self.kernel)
                 self.image += noise
         
         self.kernel_noise = 0
@@ -178,20 +196,30 @@ class Image():
         '''Plots image'''
         cy2, cx2 = self.cy + 0.5, self.cx + 0.5
         unit_label = 'pixels'
+        if hasattr(self, 'y_max'):
+            down, up = -self.y_max, self.y_max
         
         if unit == 'au':
             cx2 *= self.scale
             cy2 *= self.scale
+            if hasattr(self, 'y_max'):
+                down *= self.scale
+                up *= self.scale
             unit_label = 'au'
         elif unit == 'beam':
             cx2 /= self.beam_fwhm
             cy2 /= self.beam_fwhm
+            if hasattr(self, 'y_max'):
+                down /= self.beam_fwhm
+                up /= self.beam_fwhm
             unit_label = 'beam FWHMs'
         plt.figure()
         plt.imshow(self.image, extent=[-cx2, cx2, -cy2, cy2], origin='lower')
         
         plt.xlabel(f'Relative RA ({unit_label})')
         plt.ylabel(f'Relative Dec ({unit_label})')
+        if hasattr(self, 'y_max'):
+            plt.ylim([down, up])
         #plt.tight_layout()
         plt.show()
     
@@ -452,8 +480,8 @@ class Empty():
 class StoreImage():
     '''Use this class to create an image object that can be stored.'''
     
-    def __init__(self, image_object):
-        '''Creates a new image object with the same attributes except ones that can't be pickled'''
+    def __init__(self, image):
+        '''Creates a new image object with the same attributes except ones that can't be pickled. IMAGE is an image object. '''
         for x in image.__dict__.keys():
             if x == 'radial':
                 self.radial = Empty()
@@ -672,6 +700,8 @@ class RadialProfile():
         
             # Add noise to model
             noise = np.random.normal(0, extra_noise, self.image.image.shape)
+            if self.image.convolve_noise:
+                noise = convolve(noise, kernel)
             if self.image.add_blur:
                 noise = blur(noise, self.image.add_blur)
             noisy_model = noiseless_model + noise
@@ -1055,6 +1085,8 @@ class HeightProfile():
             
             # Add noise to model
             noise = np.random.normal(0, extra_noise, self.image.image.shape)
+            if self.image.convolve_noise:
+                noise = convolve(noise, self.image.kernel)
             if self.image.add_blur:
                 noise = blur(noise, self.image.add_blur)
             noisy_model = noiseless_model + noise
@@ -1191,7 +1223,7 @@ class HeightProfile():
         plt.figure()
         if average:
             plt.plot(r1, meanlr(ymedian), color='C0', alpha=0.8, linewidth=2, label='Fitted from obs.')
-            plt.fill_between(r1, meanlr(yup), meanlr(ydown), color='C0', alpha=0.5, linewidth=0)
+            plt.fill_between(r1, meanlr(yup), meanlr(ydown), color='C0', alpha=0.3, linewidth=0)
             
             if self.extra_noise:
                 plt.plot(r1, meanlr(ymedian2), color='C1', alpha=0.8, linewidth=2, label='Fitted from model')
@@ -1200,7 +1232,7 @@ class HeightProfile():
         else:
             plt.plot(r1, ymedian['left'], alpha=0.8, linewidth=2, label='Left')
             plt.plot(r1, ymedian['right'], alpha=0.8, linewidth=2, label='Right')
-            handlelr(plt.fill_between)(r1, yup, ydown, alpha=0.5)
+            handlelr(plt.fill_between)(r1, yup, ydown, alpha=0.3)
         
         # Plot true profiles
         if self.image.is_fake_image:

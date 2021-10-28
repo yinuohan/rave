@@ -292,23 +292,22 @@ def make_kernel2(dim, fwhm_x, fwhm_y, theta=0):
         return np.exp( - (x/sx)**2/2 - (y/sy)**2/2 )
     
     # Grid coordinates
-    dim2 = 2 * dim
-    x = np.arange(-dim2//2, dim2//2+1)
+    x = np.arange(-(dim//2), dim//2+1)
     xx, yy = np.meshgrid(x, x)
     
     # Make kernel
     kernel = g(xx, yy, fwhm_x/2.355, fwhm_y/2.355)
     
     # Rotate
-    kernel = rotate(kernel, theta)
+    kernel = rotate(kernel, theta, reshape=False)
     
     # Re-centre
-    y, x = kernel.shape        
-    by, bx = brightest_pixel(kernel)
+    #y, x = kernel.shape        
+    #by, bx = brightest_pixel(kernel)
     #if y % 2 == 0 and x % 2 == 0:
     #    from scipy.ndimage import shift
     #    kernel = shift(kernel, ())
-    kernel = kernel[by-dim//2:by+dim//2+1, bx-dim//2:bx+dim//2+1]
+    #kernel = kernel[by-dim//2:by+dim//2+1, bx-dim//2:bx+dim//2+1]
     kernel /= kernel.sum()
     
     return kernel
@@ -324,6 +323,62 @@ def calculate_beam_area(fwhm_x, fwhm_y):
 def pythagoras(a, b):
     '''Calculates the length of the hypotenuse'''
     return np.sqrt(a**2 + b**2)
+
+
+## Noise functions
+def measure_noise(image, fwhm_x, fwhm_y, noise_sd=None, verbose=True):
+    '''Measures noise per beam'''
+    beam_area = calculate_beam_area(fwhm_x, fwhm_y)
+    n_pixels = int(np.round(np.sqrt(beam_area)))
+    all_means = []
+
+    for i in range(1000):
+        y, x = image.shape
+        yi, xi = np.random.randint(y-n_pixels), np.random.randint(x-n_pixels)
+
+        cutout = image[yi:yi+n_pixels, xi:xi+n_pixels]
+        all_means.append(cutout.sum())
+    noise_per_beam = np.std(all_means)
+
+    if verbose:
+        if noise_sd: # Noise injected into image before convolution
+            print('Injected noise per pixel:', f'{noise_sd:.2f}')
+        noise_per_pixel = np.std(image)
+        print('Measured noise per pixel:', f'{noise_per_pixel:.2f}')
+        if noise_sd:
+            inferred = np.sqrt(beam_area) * noise_sd
+            print('Inferred noise per beam:', f'{inferred:.2f}')
+        print('Measured nosie per beam:', f'{noise_per_beam:.2f}')
+        if noise_sd:
+            print('Ratio between measured and inferred:', f'{noise_per_beam / inferred:.2f}')
+
+    return noise_per_beam
+
+
+def calibrate_noise(kernel, fwhm_x, fwhm_y, verbose=False, plotit=True):
+    '''Calibrate how noise per pixel before convolution scales with noise per beam after convolution for a given kernel'''
+    test_shape = [200, 200]
+    noise_per_pixel_vals = np.arange(100)
+    noise_per_beam_conv_vals = []
+
+    for noise_per_pixel in noise_per_pixel_vals:
+        noise = np.random.normal(0, noise_per_pixel, test_shape)
+        noise = convolve(noise, kernel)
+        noise_per_beam_conv = measure_noise(noise, fwhm_x, fwhm_y, verbose=verbose)
+        noise_per_beam_conv_vals.append(noise_per_beam_conv)
+
+    slope, intercept = np.polyfit(noise_per_pixel_vals, noise_per_beam_conv_vals, deg=1)
+
+    if plotit:
+        plt.figure()
+        plt.plot(noise_per_pixel_vals, noise_per_beam_conv_vals, label='Measured')
+        plt.plot(noise_per_pixel_vals, noise_per_pixel_vals * slope + intercept, label='Fitted')
+        plt.xlabel('Noise per pixel before convolution')
+        plt.ylabel('Noise per beam after convolution')
+        plt.legend(frameon=False)
+        plt.show()
+
+    return slope
 
 
 ## Interpolate

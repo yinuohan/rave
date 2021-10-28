@@ -1,0 +1,23 @@
+Here are a few points on how variable names in the code correspond to those in the paper.
+Variables used to make up an observation (as opposed to fit an observation) usually have the suffix "_make".
+Variables in all caps are typically lists that store the corresponding lower case variables from a for loop. 
+
+* Rings and annuli mean the same thing and are used interchangeably. 
+  - Paper: N
+  - Code: n_rings, nrings
+
+* Boundaries of annuli
+  - Paper: R
+  - Code: R_bounds
+
+* A 1D flux profile is usually called a "linecut" in the code. 
+  - Paper: full 1D flux (L); midplane flux (l); discretised full 1D flux (K_full); discretised midplane flux (K_mid)
+  - Code: full/linecut; part; L/binned_linecut/all_binned_ring_linecut; l
+
+* Region defining midplane
+  - Paper: y_mid
+  - Code: cut_height
+
+* Surface brightness profile
+  - Paper: surface brightness profile/radial profile
+  - Code: weights/ratios when discrete, profile when continuous
