@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 #HERE = pathlib.Path(__file__).parent
 
-VERSION = '0.1.2'
+VERSION = '0.1.3'
 PACKAGE_NAME = 'rave'
 AUTHOR = 'Yinuo Han'
 AUTHOR_EMAIL = 'yh458@cam.ac.uk'
