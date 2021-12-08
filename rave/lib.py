@@ -35,12 +35,13 @@ def reshape_image(image, new_ydim, new_xdim):
     ydim, xdim = image.shape
     ycut, xcut = min(new_ydim, ydim), min(new_xdim, xdim)
 
-    image_cut = image[ydim//2 - ycut//2 : ydim//2 + ycut//2, xdim//2 - xcut//2 : xdim//2 + xcut//2]
+    image_cut = image[ydim//2 - ycut//2 : ydim//2 + ycut - ycut//2, xdim//2 - xcut//2 : xdim//2 + xcut - xcut//2]
 
     new_image = np.zeros([new_ydim, new_xdim])
-    new_image[new_ydim//2 - ycut//2 : new_ydim//2 + ycut//2, new_xdim//2 - xcut//2 : new_xdim//2 + xcut//2] = image_cut
+    new_image[new_ydim//2 - ycut//2 : new_ydim//2 + ycut - ycut//2, new_xdim//2 - xcut//2 : new_xdim//2 + xcut - xcut//2] = image_cut
 
     return new_image
+
 
 def clip(image, lower, upper, rel=True):
     '''Sets everything in image bigger than UPPER to UPPER.

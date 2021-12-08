@@ -223,7 +223,7 @@ class Image():
         #plt.tight_layout()
         plt.show()
     
-    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None):
+    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None, direction='average'):
         '''Makes a model of the image.
         Must be performed after radial profile is fitted so that SELF.RADIAL.PROFILE and SELF.RADIAL.RNEW exist. 
         Input
@@ -237,11 +237,20 @@ class Image():
             USE_KERNEL: TRUE or FALSE. If True, convolve with the PSF/beam.
             ADD_BEFORE_CONVOLVE: TRUE or FALSE. If TRUE, add unconvolved narrow annuli first before convolving the final image with the PSF/beam.
             DEFAULT_HEIGHT: if HEIGHTS is NONE and SELF.HEIGHTS.PROFILE is not fitted for the entire range in r, then use DEFAULT_HEIGHT as the height everywhere not fitted to. 
+            DIRECTION: which side of the radial and height profiles to use to make the model. If the left and right halves of the disk are assumed to the same, can use "average" to average the two profiles. 
             '''
         
         # Use bin_linecut as a binning function
         r_bounds_make = np.arange(0, self.cx + 1)
-        profile = (self.radial.profile['left'] + self.radial.profile['right']) / 2
+        if direction == 'average':
+            profile = (self.radial.profile['left'] + self.radial.profile['right']) / 2
+        elif direction == 'left':
+            profile = self.radial.profile['left']
+        elif direction == 'right':
+            self.radial.profile['right']
+        else:
+            raise KeyError("Can't recognise direction!")
+            
         weights_make = bin_linecut(profile, r_bounds_make * len(profile) / (len(r_bounds_make) - 1))
         if heights != None:
             heights_make = heights
@@ -274,7 +283,7 @@ class Image():
         
         self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve)
     
-    def plot_compare(self, cut_height=10, unit='pixel'):
+    def plot_compare(self, cut_height=10, unit='pixel', direction='average'):
         '''Makes a plot to compare the full 1D flux and midplane flux between the observation and best-fit model.'''
         if unit == 'pixel':
             r = np.arange(self.cx)
@@ -288,10 +297,22 @@ class Image():
             unit_label = 'beam FWHMs'
         
         plt.figure()
-        plt.plot(r, meanlr(make_linecut(self.image, 'full')), '--', label='Data: full flux')
-        plt.plot(r, meanlr(make_linecut(self.model.image, 'full')), label='Model: full flux')
-        plt.plot(r, meanlr(make_linecut(self.image, cut_height)), '--', label='Data: midplane flux')
-        plt.plot(r, meanlr(make_linecut(self.model.image, cut_height)), label='Model: midplane flux')
+        if direction == 'average':
+            data_full = meanlr(make_linecut(self.image, 'full'))
+            model_full = meanlr(make_linecut(self.model.image, 'full'))
+            data_part = meanlr(make_linecut(self.image, cut_height))
+            model_part = meanlr(make_linecut(self.model.image, cut_height))
+        else:
+            assert direction in ['left', 'right']
+            data_full = make_linecut(self.image, 'full')[direction]
+            model_full = make_linecut(self.model.image, 'full')[direction]
+            data_part = make_linecut(self.image, cut_height)[direction]
+            model_part = make_linecut(self.model.image, cut_height)[direction]
+        
+        plt.plot(r, data_full, '--', label='Data: full flux')
+        plt.plot(r, model_full, label='Model: full flux')
+        plt.plot(r, data_part, '--', label='Data: midplane flux')
+        plt.plot(r, model_part, label='Model: midplane flux')
         plt.xlabel(f'Radial distance ({unit_label})')
         plt.ylabel('1D flux')
         plt.legend(frameon=False)
@@ -602,7 +623,7 @@ class RadialProfile():
         # Get function that makes rings rapidly
         self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel)
     
-    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True):
+    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average'):
         '''Fits the radial surface brightness profile.
         Input
             NRINGS: number of annuli to use. 
@@ -610,7 +631,8 @@ class RadialProfile():
             EXTRA_NOISE: how much noise to add to the best-fit model to repeat the fitting procedure on. If 0, the code will skip this step. 
             RANDOM: whether or not to randomly pick annuli boundaries if there are more sets of stored annuli boundaries than needed. 
             FIT_STAR: if True, then adds an annulus that occupies the first pixel to fit to the flux of the star. 
-            FLOOR_TO_0: whether or not to set all fitted values below 0 to 0. '''
+            FLOOR_TO_0: whether or not to set all fitted values below 0 to 0. 
+            MODEL_DIRECTION: which side of the radial profile to use to make the best-fit model when fitting to the best-fit model plus noise. '''
         
         ## Preparation
         print('\n----- Radial Fit -----')
@@ -681,7 +703,7 @@ class RadialProfile():
         
         # Generate model
         if extra_noise:
-            self.image.make_model(inclination=90, heights=0)
+            self.image.make_model(inclination=90, heights=0, direction=direction)
             noiseless_model = self.image.model.image
             
         ## Fit again with noise
@@ -821,11 +843,15 @@ class RadialProfile():
             plt.plot(r, ymedian['left'], alpha=0.8, linewidth=2, label='Left')
             plt.plot(r, ymedian['right'], alpha=0.8, linewidth=2, label='Right')
             handlelr(plt.fill_between)(r, yup, ydown, alpha=0.5, linewidth=2)
+            if self.extra_noise:
+                plt.plot(r, ymedian2['left'], alpha=0.8, linewidth=2, label='Left (fitted to model)')
+                plt.plot(r, ymedian2['right'], alpha=0.8, linewidth=2, label='Right (fitted to model)')
+                handlelr(plt.fill_between)(r, yup2, ydown2, alpha=0.2, linewidth=0)
         else:
-            plt.plot(r, meanlr(ymedian), alpha=0.8, linewidth=2, label='Fitted from obs.')
+            plt.plot(r, meanlr(ymedian), alpha=0.8, linewidth=2, label='Fitted to obs.')
             plt.fill_between(r, meanlr(yup), meanlr(ydown), alpha=0.5, linewidth=0)
             if self.extra_noise:
-                plt.plot(r, meanlr(ymedian2), alpha=0.8, linewidth=2, label='Fitted from model')
+                plt.plot(r, meanlr(ymedian2), alpha=0.8, linewidth=2, label='Fitted to model')
                 plt.fill_between(r, meanlr(yup2), meanlr(ydown2), color='C1', alpha=0.2, linewidth=0)
         #plt.ylim([None, np.max(meanlr(yup)[100:])*1.2])
         
@@ -1222,17 +1248,21 @@ class HeightProfile():
         # Plot fitted profiles
         plt.figure()
         if average:
-            plt.plot(r1, meanlr(ymedian), color='C0', alpha=0.8, linewidth=2, label='Fitted from obs.')
+            plt.plot(r1, meanlr(ymedian), color='C0', alpha=0.8, linewidth=2, label='Fitted to obs.')
             plt.fill_between(r1, meanlr(yup), meanlr(ydown), color='C0', alpha=0.3, linewidth=0)
             
             if self.extra_noise:
-                plt.plot(r1, meanlr(ymedian2), color='C1', alpha=0.8, linewidth=2, label='Fitted from model')
+                plt.plot(r1, meanlr(ymedian2), color='C1', alpha=0.8, linewidth=2, label='Fitted to model')
                 plt.fill_between(r1, meanlr(yup2), meanlr(ydown2), color='C1', alpha=0.3, linewidth=0)
         
         else:
             plt.plot(r1, ymedian['left'], alpha=0.8, linewidth=2, label='Left')
             plt.plot(r1, ymedian['right'], alpha=0.8, linewidth=2, label='Right')
             handlelr(plt.fill_between)(r1, yup, ydown, alpha=0.3)
+            if self.extra_noise:
+                plt.plot(r1, ymedian2['left'], alpha=0.8, linewidth=2, label='Left (fitted to model)')
+                plt.plot(r1, ymedian2['right'], alpha=0.8, linewidth=2, label='Right (fitted to model)')
+                handlelr(plt.fill_between)(r1, yup2, ydown2, alpha=0.2, linewidth=0)
         
         # Plot true profiles
         if self.image.is_fake_image:
