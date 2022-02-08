@@ -3,7 +3,7 @@ from .short_functions import *
 from .height_functions import *
 from .ring_functions import *
 from .linecut_functions import *
-
+    
 ## Image class
 class Image():
     '''Use this class to fit to an observation. '''
@@ -213,11 +213,11 @@ class Image():
                 down /= self.beam_fwhm
                 up /= self.beam_fwhm
             unit_label = 'beam FWHMs'
-        plt.figure()
+        plt.figure(figsize=(6, 5))
         plt.imshow(self.image, extent=[-cx2, cx2, -cy2, cy2], origin='lower')
         
-        plt.xlabel(f'Relative RA ({unit_label})')
-        plt.ylabel(f'Relative Dec ({unit_label})')
+        plt.xlabel(f'Distance ({unit_label})')
+        plt.ylabel(f'Distance ({unit_label})')
         if hasattr(self, 'y_max'):
             plt.ylim([down, up])
         #plt.tight_layout()
@@ -247,7 +247,7 @@ class Image():
         elif direction == 'left':
             profile = self.radial.profile['left']
         elif direction == 'right':
-            self.radial.profile['right']
+            profile = self.radial.profile['right']
         else:
             raise KeyError("Can't recognise direction!")
             
@@ -602,6 +602,7 @@ class RadialProfile():
         plt.title('Quick radial profile')
         plt.xlabel(f'Radial distance ({unit_label})')
         plt.ylabel('Surface brightness (Jy/beam)')
+        #plt.ylabel('Surface brightness')
         plt.tight_layout()
         plt.show()
     
@@ -858,11 +859,12 @@ class RadialProfile():
         if self.image.is_fake_image:
             pltstep(r2, self.image.weights_make, color=colours[3], alpha=0.8, linestyle='--', label='True')
         
-        if not average or self.image.is_fake_image:
-            plt.legend(frameon=False)
-        plt.title(f'{self.nrings} annuli, {self.image.noise_per_pixel/self.image.image.max()*100:.0f}% noise ({self.n_iterations} iterations)')
+        #if not average or self.image.is_fake_image:
+        plt.legend(frameon=False)
+        #plt.title(f'{self.nrings} annuli, {self.image.noise_per_pixel/self.image.image.max()*100:.0f}% noise ({self.n_iterations} iterations)')
         plt.xlabel(f'Radial distance ({unit_label})')
         plt.ylabel(r'Surface brightness ($\mu$Jy/beam)')
+        #plt.ylabel(r'Surface brightness')
         plt.tight_layout()
         plt.show()
     
@@ -969,7 +971,7 @@ class HeightProfile():
         plt.tight_layout()
         
     
-    def fit(self, nrings, cut_height, starting_height, n_iterations=100, extra_noise=0, flux_range=None, random=True, verbose=True, remove_default=True):
+    def fit(self, nrings, cut_height, starting_height, n_iterations=100, extra_noise=0, flux_range=None, random=True, verbose=True, remove_default=True, direction='average'):
         '''Fits the radial height profile.
         Input
             NRINGS: number of annuli to use. 
@@ -1083,7 +1085,7 @@ class HeightProfile():
         
         # Generate model
         if extra_noise:
-            self.image.make_model(inclination=self.inclination, heights=None, h_over_r=False, n_points_per_pixel=200, rapid=True, use_kernel=True, default_height=starting_height)
+            self.image.make_model(inclination=self.inclination, heights=None, h_over_r=False, n_points_per_pixel=200, rapid=True, use_kernel=True, default_height=starting_height, direction=direction)
 
             noiseless_model = self.image.model.image
         
@@ -1271,7 +1273,7 @@ class HeightProfile():
         
         # Legend
         plt.legend(frameon=False)
-        plt.title(f'{self.nrings} annuli, {self.image.noise_per_pixel/self.image.image.max()*100:.0f}% noise ({self.n_iterations} iterations)\n {self.inclination} inclination, {self.cut_height} cut height, {self.starting_height} starting height, {self.dh} dh')
+        #plt.title(f'{self.nrings} annuli, {self.image.noise_per_pixel/self.image.image.max()*100:.0f}% noise ({self.n_iterations} iterations)\n {self.inclination} inclination, {self.cut_height} cut height, {self.starting_height} starting height, {self.dh} dh')
         plt.xlabel(f'Radial distance ({unit_label})')
         if h_over_r:
             plt.ylabel('H/r')
