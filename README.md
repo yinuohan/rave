@@ -8,7 +8,7 @@ Given an input image of a highly inclined (edge-on, or nearly edge-on) debris di
 [This paper]() provides details of the algorithm and its performance. 
 
 ## Installation
-Rave is available at [https://pypi.org/project/rave/](https://pypi.org/project/rave/) and we recommend installing via
+Rave is available at [pypi.org/project/rave](https://pypi.org/project/rave/). We recommend installing via
 
 `pip install rave`
 
