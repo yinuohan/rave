@@ -223,7 +223,7 @@ class Image():
         #plt.tight_layout()
         plt.show()
     
-    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None, direction='average'):
+    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None, direction='average', floor_to_0=True):
         '''Makes a model of the image.
         Must be performed after radial profile is fitted so that SELF.RADIAL.PROFILE and SELF.RADIAL.RNEW exist. 
         Input
@@ -250,6 +250,9 @@ class Image():
             profile = self.radial.profile['right']
         else:
             raise KeyError("Can't recognise direction!")
+        
+        if floor_to_0:
+            profile = floor(profile)
             
         weights_make = bin_linecut(profile, r_bounds_make * len(profile) / (len(r_bounds_make) - 1))
         if heights != None:
@@ -1160,7 +1163,6 @@ class HeightProfile():
             F_LIM: only plots the heights for regions with flux above F_LIM. Recommending setting to 0 if using REMOVE_DEFAULT when fitting. 
             AVERAGE: whether or not to average the fits to the left and right halves of the image. In most cases you probably have averaged the left and right halves of the image already, so the two fits should be the same. Recommend using TRUE.
             USE_AU: this keyword is identical to UNIT in other methods. Can be 'pixel', 'au' or 'beam'.
-            FLOOR_TO_0: whether or not to set everything below 0 to 0 when plotting. 
             H_OVER_R: if TRUE, plots y axis as h/r instead of h. '''
         
         # Smoothing

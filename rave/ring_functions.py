@@ -28,6 +28,9 @@ def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, 
         B_adjust = 1/n_points_per_pixel
     
     Theta = np.random.uniform(0, 360, n_points)/180*np.pi
+    "Avoid all points being binned to row of pixels above midplane when h = 0"
+    if height == 0:
+        height = 0.001 
     Z = np.random.normal(0, height, n_points)
     
     X = R * np.cos(Theta)
