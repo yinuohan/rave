@@ -281,7 +281,9 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
         index_outer = round(r_outer/dr)
         assert 0 <= index_inner <= len(RINGS) and 0 <= index_outer <= len(RINGS), 'Outside rapid range!'
         ring = np.sum(RINGS[index_inner:index_outer], axis=0)
-        if kernel is not None:
+        if callable(kernel):
+            ring = kernel(ring)
+        elif kernel is not None:
             ring = convolve(ring, kernel)
         return ring
     

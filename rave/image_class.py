@@ -284,7 +284,7 @@ class Image():
         else:
             kernel = None
         
-        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve)
+        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve, convolution_function=self.radial.convolution_function)
     
     def plot_compare(self, cut_height=10, unit='pixel', direction='average'):
         '''Makes a plot to compare the full 1D flux and midplane flux between the observation and best-fit model.'''
@@ -401,7 +401,7 @@ class Image():
 class MakeImage(Image):
     '''Use this class to make up an image for testing'''
     
-    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True):
+    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True, convolution_function=None):
         '''Specify parameters used to make up the image.
         All units are in pixels. 
         Input:
@@ -444,8 +444,11 @@ class MakeImage(Image):
                 rings_make = self.rapid_rings(r_bounds_make, None)
         
         image = weighted_sum(weights_make, rings_make)
-        if add_before_convolve and not np.any(kernel == None):
-            image = convolve(image, kernel)
+        if add_before_convolve:# and not np.any(kernel == None):
+            if convolution_function:
+                image = convolution_function(image)
+            elif not np.any(kernel == None):
+                image = convolve(image, kernel)
         
         self.image = image
         self.kernel = kernel
@@ -627,7 +630,7 @@ class RadialProfile():
         # Get function that makes rings rapidly
         self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel)
     
-    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average'):
+    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average', convolution_function=None):
         '''Fits the radial surface brightness profile.
         Input
             NRINGS: number of annuli to use. 
@@ -646,6 +649,7 @@ class RadialProfile():
         self.n_iterations = n_iterations
         self.extra_noise = extra_noise
         self.fit_star = fit_star
+        self.convolution_function = convolution_function
         
         # Set up variables
         dr = self.dr
@@ -688,7 +692,10 @@ class RadialProfile():
             
             # Make annuli
             r_bounds = self.R_BOUNDS[i]
-            rings = self.rapid_rings(r_bounds, kernel)
+            if convolution_function:
+                rings = self.rapid_rings(r_bounds, kernel=convolution_function)
+            else:
+                rings = self.rapid_rings(r_bounds, kernel)
             abrl = bin_rings(rings, r_bounds, 'full')
             
             # Fit with matrix and iterative method
