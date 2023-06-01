@@ -1,6 +1,6 @@
-from .lib import *
-from .short_functions import *
-from .linecut_functions import *
+#from .lib import *
+#from .short_functions import *
+#from .linecut_functions import *
 
 
 ## Making rings
@@ -152,17 +152,15 @@ def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0):
     assert right_edge_pixel > left_edge_pixel
     range_pixels = right_edge_pixel - left_edge_pixel
 
-    width_floor = max(0.1 * range_pixels / nrings, 1)
-    width_ceil = 5 * range_pixels / nrings
+    #width_floor = max(0.1 * range_pixels / nrings, 1)
+    #width_ceil = 5 * range_pixels / nrings
     
-    '''
     if nrings <= 20 and range_pixels/nrings >= 5:
         width_floor = 0.3 * range_pixels / nrings
         width_ceil = 2 * range_pixels / nrings
     else:
         width_floor = 0.3 * range_pixels / nrings
         width_ceil = 5 * range_pixels / nrings
-    '''
     
     while True:
         r_bounds = np.random.uniform(left_edge_pixel, right_edge_pixel, nrings-1)
@@ -234,24 +232,69 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
     return R_BOUNDS
 
 
-def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=200, timeit=True):
+def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=200, timeit=True, h_over_r=False, interpolate_height=False):
     '''Narrow annuli are used to speed up simulating ring images, because adding up narrow rings is faster than making up new rings. 
     This function reads in pre-generated narrow annuli if they exist. Otherwise it makes a new set of annuli with the right conditions and stores them. '''
+    
+    if interpolate_height:      
+        # Vertically stretch/re-scale the set of annuli with the most similar height to approximate the annuli with the required height.
+        
+        "Print warning if disk is not edge-on"
+        if np.abs(inclination - 90) > 5:
+            print('Interpolating height over face-on disks, which gives wrong geometry!')
+    
+        "Find all available height values"
+        hr_available = []
+        H_available = []
+    
+        for filename in os.listdir():
+            if 'RapidAnnuli' in filename:
+                heightname = filename.split('_')[3]
+                if 'hr' in filename:
+                    hr_available.append(float(heightname[2:]))
+                else:
+                    H_available.append(float(heightname))
+    
+        hr_available = np.sort(hr_available)
+        H_available = np.sort(H_available)
+    
+        if h_over_r:
+            use_height = hr_available
+            tag = 'h/r'
+        else:
+            use_height = H_available
+            tag = 'H'
+    
+        "Find nearest available height value"
+        nearest_heightval = use_height[abs(height - use_height) == min(abs(height - use_height))][0]
+        print(f"Approximating {tag} = {height} using {nearest_heightval}")
+        
+        "Shuffle variables"
+        required_height = height
+        height = nearest_heightval
     
     # Try stored rings
     import pickle
     prefix = 'RapidAnnuli_'
     suffix = '.python'
     found_cache = 0
+    
+    if h_over_r:
+        heightname = f'hr{height}'
+    else:
+        if height % 1 == 0:
+            height = int(height)
+        heightname = str(height)
+    
     for filename in os.listdir():
         if prefix in filename:
 
             # Remove prefix and suffix and get parameters
             filename2 = filename.replace(prefix, '').replace(suffix, '')
-            dim2, n_points_per_pixel2, height2, inclination2, r_outer2, dr2 = [float(element) for element in filename2.split('_')]
+            dim2, n_points_per_pixel2, height2, inclination2, r_outer2, dr2 = [element for element in filename2.split('_')]
             
             # Compare parameters
-            if [dim, height, inclination, dr] == [dim2, height2, inclination2, dr2] and r_outer <= r_outer2:
+            if [dim, heightname, inclination, dr] == [float(dim2), height2, float(inclination2), float(dr2)] and r_outer <= float(r_outer2):
                 print('    Found stored rings', filename2)
                 found_cache = 1
                 file = open(filename, 'rb')
@@ -262,12 +305,17 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
     # Otherwise make rings
     if not found_cache:
         print('    Making rapid rings')
-        filename = f'{prefix}{dim}_{n_points_per_pixel}_{height}_{inclination}_{r_outer}_{dr}{suffix}'
+        filename = f'{prefix}{dim}_{n_points_per_pixel}_{heightname}_{inclination}_{r_outer}_{dr}{suffix}'
         print('    ' + filename)
         t0 = time.time()
         
         r_bounds_make = np.arange(0, r_outer+dr, dr)
-        RINGS = make_all_rings(r_bounds_make, height, inclination, dim, n_points_per_pixel, kernel=None)
+        r_centre = (r_bounds_make[1: ] + r_bounds_make[ :-1]) / 2
+        
+        if h_over_r:
+            RINGS = make_all_rings(r_bounds_make, r_centre * height, inclination, dim, n_points_per_pixel, kernel=None)
+        else:
+            RINGS = make_all_rings(r_bounds_make, height, inclination, dim, n_points_per_pixel, kernel=None)
         
         # Store rings
         f = open(filename, 'wb')
@@ -278,6 +326,22 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
         
         if timeit:
             print('    Time taken:', f'{(time.time() - t0):.0f}')
+    
+    if interpolate_height:
+        "Vertically scale the image of a ring while retaining the total flux"
+        def zoom_height(image, old_height, new_height):
+            ratio = new_height / old_height
+            new_image = zoom(image, [ratio, 1])
+            if new_image.shape[0] % 2 != image.shape[0] % 2:
+                from scipy.ndimage import shift
+                new_image = shift(new_image, [-0.5, 0])
+            new_image = new_image / ratio
+            new_image = reshape_image(new_image, *image.shape)
+            return new_image
+    
+        "Apply to all rings"
+        for i in range(len(RINGS)):
+            RINGS[i] = zoom_height(RINGS[i], height, required_height)
     
     
     # Define ring-generating functions

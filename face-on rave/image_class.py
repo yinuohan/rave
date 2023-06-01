@@ -1,8 +1,8 @@
-from .lib import *
-from .short_functions import *
-from .height_functions import *
-from .ring_functions import *
-from .linecut_functions import *
+#from .lib import *
+#from .short_functions import *
+#from .height_functions import *
+#from .ring_functions import *
+#from .linecut_functions import *
 
 ## Image class
 class Image():
@@ -223,7 +223,7 @@ class Image():
         #plt.tight_layout()
         plt.show()
     
-    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=True, use_kernel=True, add_before_convolve=True, default_height=None, direction='average', floor_to_0=True):
+    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=False, use_kernel=True, add_before_convolve=True, default_height=None, direction='average', floor_to_0=True, interpolate_height=False):
         '''Makes a model of the image.
         Must be performed after radial profile is fitted so that SELF.RADIAL.PROFILE and SELF.RADIAL.RNEW exist. 
         Input
@@ -257,10 +257,10 @@ class Image():
         weights_make = bin_linecut(profile, r_bounds_make * len(profile) / (len(r_bounds_make) - 1))
         if heights != None:
             heights_make = heights
-            if h_over_r:
-                rapid = False
-                r = (r_bounds_make[:-1] + r_bounds_make[1:]) / 2
-                heights_make = heights * r
+            #if h_over_r:
+            #    rapid = False
+            #    r = (r_bounds_make[:-1] + r_bounds_make[1:]) / 2
+            #    heights_make = heights * r
         else:
             rapid = False
             r = self.height.rnew
@@ -284,7 +284,7 @@ class Image():
         else:
             kernel = None
         
-        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve, convolution_function=self.radial.convolution_function)
+        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve, convolution_function=self.radial.convolution_function, h_over_r=h_over_r, interpolate_height=interpolate_height)
     
     def plot_compare(self, cut_height=10, unit='pixel', direction='average'):
         '''Makes a plot to compare the full 1D flux and midplane flux between the observation and best-fit model.'''
@@ -299,28 +299,45 @@ class Image():
             r = np.arange(self.cx) / self.beam_fwhm
             unit_label = 'beam FWHMs'
         
-        plt.figure()
-        if direction == 'average':
-            data_full = meanlr(make_linecut(self.image, 'full'))
-            model_full = meanlr(make_linecut(self.model.image, 'full'))
-            data_part = meanlr(make_linecut(self.image, cut_height))
-            model_part = meanlr(make_linecut(self.model.image, cut_height))
-        else:
-            assert direction in ['left', 'right']
-            data_full = make_linecut(self.image, 'full')[direction]
-            model_full = make_linecut(self.model.image, 'full')[direction]
-            data_part = make_linecut(self.image, cut_height)[direction]
-            model_part = make_linecut(self.model.image, cut_height)[direction]
+        if self.radial.mode == 'edge-on':
+            if direction == 'average':
+                data_full = meanlr(make_linecut(self.image, 'full'))
+                model_full = meanlr(make_linecut(self.model.image, 'full'))
+                data_part = meanlr(make_linecut(self.image, cut_height))
+                model_part = meanlr(make_linecut(self.model.image, cut_height))
+            else:
+                assert direction in ['left', 'right']
+                data_full = make_linecut(self.image, 'full')[direction]
+                model_full = make_linecut(self.model.image, 'full')[direction]
+                data_part = make_linecut(self.image, cut_height)[direction]
+                model_part = make_linecut(self.model.image, cut_height)[direction]
+            
+            plt.figure()
+            plt.plot(r, data_full, '--', label='Data: full flux')
+            plt.plot(r, model_full, label='Model: full flux')
+            plt.plot(r, data_part, '--', label='Data: midplane flux')
+            plt.plot(r, model_part, label='Model: midplane flux')
+            plt.xlabel(f'Radial distance ({unit_label})')
+            plt.ylabel('1D flux')
+            plt.legend(frameon=False)
+            plt.tight_layout()
+            plt.show()
+    
+        elif self.radial.mode == 'face-on':
+            image_profile = get_azimuthal_profile2(self.image, self.radial.inclination)
+            model_profile = get_azimuthal_profile2(self.model.image, self.radial.inclination)
+            
+            plt.figure()
+            plt.plot(r, image_profile, '--', label='Data: azimuthally averaged profile')
+            plt.plot(r, model_profile, label='Model: azimuthally averaged profile')
+            plt.xlabel(f'Radial distance ({unit_label})')
+            plt.ylabel('Azimuthally averaged profile')
+            plt.legend(frameon=False)
+            plt.tight_layout()
+            plt.show()
         
-        plt.plot(r, data_full, '--', label='Data: full flux')
-        plt.plot(r, model_full, label='Model: full flux')
-        plt.plot(r, data_part, '--', label='Data: midplane flux')
-        plt.plot(r, model_part, label='Model: midplane flux')
-        plt.xlabel(f'Radial distance ({unit_label})')
-        plt.ylabel('1D flux')
-        plt.legend(frameon=False)
-        plt.tight_layout()
-        plt.show()
+        else:
+            raise KeyError('Radial profile mode not recognised!')
     
     def fit_inclination(self, cut_height=10, inc_range=[0, 90], guess=58, delta=1, unit='pixel'):
         '''Finds a lower bound for the inclination.
@@ -401,7 +418,7 @@ class Image():
 class MakeImage(Image):
     '''Use this class to make up an image for testing'''
     
-    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True, convolution_function=None):
+    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True, convolution_function=None, h_over_r=False, interpolate_height=False):
         '''Specify parameters used to make up the image.
         All units are in pixels. 
         Input:
@@ -415,6 +432,9 @@ class MakeImage(Image):
             SCALE: AU per pixel.  
             RAPID: TRUE or FALSE. If TRUE, make model by summing up pre-generated narrow annuli. If FALSE, use Monte Carlo method. 
             ADD_BEFORE_CONVOLVE: TRUE or FALSE. If TRUE, add unconvolved narrow annuli first before convolving the final image with the PSF/beam.
+            CONVOLUTION_FUNCTION: use a function that performs the convolution instead of a simple image of a PSF kernel. Useful for spatially-varying PSFs such as when observing with coronagraphs. 
+            H_OVER_R: TRUE is the specified HEIGHTS_MAKE is h/r instead of H. 
+            INTERPOLATE_HEIGHT: Vertically stretch/re-scale the set of annuli with the most similar height to approximate the annuli with the required height, instead of simulating it properly. Only use this if you want to fit lots of different h/r quickly without being too precise. 
         '''
             
         self.r_bounds_make = r_bounds_make
@@ -424,12 +444,17 @@ class MakeImage(Image):
         self.dim = dim
         self.n_points_per_pixel = n_points_per_pixel
         self.scale = scale
+        self.h_over_r = h_over_r
+        self.interpolate_height = interpolate_height
         
         # Make image
         if verbose:
             print('Making image')
         if not rapid:
             t0 = time.time()
+            if h_over_r:
+                r = (r_bounds_make[:-1] + r_bounds_make[1:]) / 2
+                heights_make = heights_make * r
             if not add_before_convolve:
                 rings_make = make_all_rings(r_bounds_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, verbose=verbose)
             else:
@@ -462,7 +487,7 @@ class MakeImage(Image):
         '''Load the rapid annuli used to generate the fake image.'''
         print('\n----- Make image annuli -----')
         
-        self.rapid_rings = get_narrow_annuli(self.dim//2, dr, self.heights_make, self.inclination_make, self.dim, self.n_points_per_pixel)
+        self.rapid_rings = get_narrow_annuli(self.dim//2, dr, self.heights_make, self.inclination_make, self.dim, self.n_points_per_pixel, h_over_r=self.h_over_r, interpolate_height=self.interpolate_height)
     
 
 class LoadImage(MakeImage):
@@ -612,7 +637,7 @@ class RadialProfile():
         plt.tight_layout()
         plt.show()
     
-    def get_rapid_annuli(self, r_outer, dr=0.1, height=10, inclination=90, points_per_pixel=200):
+    def get_rapid_annuli(self, r_outer, dr=0.1, height=10, inclination=90, points_per_pixel=200, h_over_r=False):
         '''Gets narrow annuli with the required properties. 
         Input:
             R_OUTER: outermost radial location with flux to fit to. 
@@ -624,11 +649,12 @@ class RadialProfile():
         self.r_outer = r_outer
         self.dr = dr
         self.height = height
+        self.h_over_r = h_over_r
         self.inclination = inclination
         self.points_per_pixel = points_per_pixel
         
         # Get function that makes rings rapidly
-        self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel)
+        self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel, h_over_r=h_over_r)
     
     def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average', convolution_function=None):
         '''Fits the radial surface brightness profile.
@@ -643,6 +669,8 @@ class RadialProfile():
         
         ## Preparation
         print('\n----- Radial Fit -----')
+        
+        self.mode = 'edge-on'
         
         # Set up attributes
         self.nrings = nrings
@@ -708,12 +736,12 @@ class RadialProfile():
         # Interpolate points
         self.rnew, INTERPOLATED = interpolate(self.MTXRATIOS, self.R_BOUNDS)
         
-        ## Make noiseless model
         # *** Store profile ***
         self.profile = handlelr(np.median)(INTERPOLATED, axis=0)
-        
-        # Generate model
+            
+        ## Fit again with noise
         if extra_noise:
+            # Generate noiselessmodel
             self.image.make_model(inclination=90, heights=0, direction=direction)
             noiseless_model = self.image.model.image
             
@@ -752,6 +780,154 @@ class RadialProfile():
                 self.RATIOS_2['left'][i], self.RATIOS_2['right'][i] = mtxratios2['left'], mtxratios2['right']
         
         else:
+            self.RATIOS_2 = self.MTXRATIOS
+            
+        # Interpolate points        
+        self.rnew, INTERPOLATED2 = interpolate(self.RATIOS_2, self.R_BOUNDS)
+        
+        ## Calculate percentiles
+        quantile_range = 0.34
+        
+        # Uncertainty without noise [first shade of uncertainty]
+        self.profile_up = handlelr(np.quantile)(INTERPOLATED, 0.5 + quantile_range, axis=0)
+        self.profile_down = handlelr(np.quantile)(INTERPOLATED, 0.5 - quantile_range, axis=0)
+        
+        # Uncertainty with noise [not used]
+        self.profile2 = handlelr(np.median)(INTERPOLATED2, axis=0)
+        
+        # Uncertainty without noise [second shade of uncertainty]
+        self.profile_up2 = handlelr(np.quantile)(INTERPOLATED2, 0.5 + quantile_range, axis=0)
+        self.profile_down2 = handlelr(np.quantile)(INTERPOLATED2, 0.5 - quantile_range, axis=0)
+        
+        # Set negative values to 0
+        if floor_to_0:
+            self.profile = floor(self.profile)
+            self.profile_up = floor(self.profile_up)
+            self.profile_down = floor(self.profile_down)
+            
+            self.profile = floor(self.profile)
+            self.profile_up2 = floor(self.profile_up2)
+            self.profile_down2 = floor(self.profile_down2)
+        
+        print('Time taken:', f'{(time.time() - t0):.0f}')
+    
+    def afit(self, nrings, n_iterations=100, inclination=0, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, convolution_function=None):
+        '''Fits the radial surface brightness profile for a more face-on disk.
+        Input
+            NRINGS: number of annuli to use. 
+            N_ITERATIONS: how many sets of fits to perform. Each set has a different set of annuli boundaries. 
+            EXTRA_NOISE: how much noise to add to the best-fit model to repeat the fitting procedure on. If 0, the code will skip this step. 
+            RANDOM: whether or not to randomly pick annuli boundaries if there are more sets of stored annuli boundaries than needed. 
+            FIT_STAR: if True, then adds an annulus that occupies the first pixel to fit to the flux of the star. 
+            FLOOR_TO_0: whether or not to set all fitted values below 0 to 0. 
+            MODEL_DIRECTION: which side of the radial profile to use to make the best-fit model when fitting to the best-fit model plus noise. '''
+        
+        ## Preparation
+        print('\n----- Radial Fit -----')
+        
+        self.mode = 'face-on'
+        
+        # Set up attributes
+        self.nrings = nrings
+        self.n_iterations = n_iterations
+        self.extra_noise = extra_noise
+        self.fit_star = fit_star
+        self.convolution_function = convolution_function
+        
+        # Set up variables
+        dr = self.dr
+        kernel = self.image.kernel
+        ndim = nrings + fit_star
+        
+        # Get annuli boundaries
+        if not fit_star:
+            self.R_BOUNDS = get_r_bounds(self.nrings, self.r_outer, n_iterations)
+        else:
+            "Include an additional ring with radius = 1 pixel"
+            R_BOUNDS = get_r_bounds(self.nrings, [1, self.r_outer], n_iterations, use_flux_range=True)
+            R_BOUNDS2 = np.zeros([len(R_BOUNDS), ndim+1])
+            for i in range(len(R_BOUNDS)):
+                R_BOUNDS2[i] = np.r_[0, R_BOUNDS[i]]
+            self.R_BOUNDS = R_BOUNDS2
+        
+        # Set up storing variables
+        self.R_BOUNDS = np.round(self.R_BOUNDS / dr) * dr
+        self.MTXRATIOS = handlelr(np.zeros)([n_iterations, ndim])
+        "fitted with extra noise"
+        self.RATIOS_2 = handlelr(np.zeros)([n_iterations, ndim]) 
+        
+        # Pick subset of boundaries to use 
+        if random:
+            indices = np.random.choice(len(self.R_BOUNDS), n_iterations, replace=False)
+            self.R_BOUNDS = self.R_BOUNDS[indices]
+        else:
+            self.R_BOUNDS = self.R_BOUNDS[0:n_iterations]
+        
+        # Time it
+        t0 = time.time()
+        
+        ## Fit for each set of annuli boundaries
+        for i in range(n_iterations):
+            
+            # Print status
+            if verbose: print(i, end=' ')
+            
+            # Make annuli
+            r_bounds = self.R_BOUNDS[i]
+            if convolution_function:
+                rings = self.rapid_rings(r_bounds, kernel=convolution_function)
+            else:
+                rings = self.rapid_rings(r_bounds, kernel)
+            abrl = azimuthal_bin_rings(rings, r_bounds, inclination)
+            
+            # Fit with matrix and iterative method
+            L = get_binned_azimuthal_profile2(self.image.image, r_bounds, inclination=inclination)
+            mtxratios, _ = matrix_fit(L, abrl)
+        
+            # Store values
+            self.MTXRATIOS['left'][i], self.MTXRATIOS['right'][i] = mtxratios, mtxratios
+            
+        # Interpolate points
+        self.rnew, INTERPOLATED = interpolate(self.MTXRATIOS, self.R_BOUNDS)
+        
+        # *** Store profile ***
+        self.profile = handlelr(np.median)(INTERPOLATED, axis=0)
+        
+        ## Fit again with noise     
+        if extra_noise:
+            # Generate noiseless model
+            self.image.make_model(inclination=0, heights=0, direction=direction)
+            noiseless_model = self.image.model.image
+
+            for i in range(n_iterations):
+                
+                # Print status
+                if verbose: print('n', i, end=' ')
+                
+                # Make annuli
+                r_bounds = self.R_BOUNDS[i]
+                rings = self.rapid_rings(r_bounds, kernel)
+                abrl = azimuthal_bin_rings(rings, r_bounds, inclination)
+            
+                # Add noise to model
+                noise = np.random.normal(0, extra_noise, self.image.image.shape)
+                if self.image.convolve_noise:
+                    noise = convolve(noise, kernel)
+                if self.image.add_blur:
+                    noise = blur(noise, self.image.add_blur)
+                noisy_model = noiseless_model + noise
+                noisy_model = cut(noisy_model, self.image.y_max)
+                if self.image.flipped:
+                    noisy_model = (noisy_model + rotate180(noisy_model)) / 2
+                
+                # Fit with matrix method
+                L2 = get_binned_azimuthal_profile2(noisy_model, r_bounds, inclination=inclination)
+                mtxratios2, _ = matrix_fit(L2, abrl)
+            
+                # Store values
+                self.RATIOS_2['left'][i], self.RATIOS_2['right'][i] = mtxratios2, mtxratios2
+        
+        if not extra_noise:
             self.RATIOS_2 = self.MTXRATIOS
             
         # Interpolate points        
@@ -1099,57 +1275,57 @@ class HeightProfile():
 
             noiseless_model = self.image.model.image
         
-            ## Fit again with noise
-            for i in range(n_iterations):
-                
-                # Don't fit with extra noise if no extra noise specified
-                if not extra_noise: continue
-                
-                # Print status
-                if verbose: print('n', i, end=' ')
-                
-                # Get annuli boundaries
-                r_bounds = self.R_BOUNDS[i]
-                
-                # Get HEIGHT_CALIBRATORS and PART_GENERATORS for all annuli
-                "HEIGHT_CALIBRATORS: mapping between h and midplane flux"
-                "PART_GENERATORS: generates midplane flux given height"
-                height_calibrators, part_generators, intp_range = make_generators(r_bounds, self.interp_heights, self.image.xdim, self.RAPID_RINGS, self.image.kernel, cut_height, testing=True)
-                
-                "Store these functions for testing"
-                self.height_calibrators = height_calibrators
-                self.part_generators = part_generators
-                self.intp_range = intp_range
-                
-                # Add noise to model
-                noise = np.random.normal(0, extra_noise, self.image.image.shape)
-                if self.image.convolve_noise:
-                    noise = convolve(noise, self.image.kernel)
-                if self.image.add_blur:
-                    noise = blur(noise, self.image.add_blur)
-                noisy_model = noiseless_model + noise
-                noisy_model = cut(noisy_model, self.image.y_max)
-                if self.image.flipped:
-                    noisy_model = (noisy_model + rotate180(noisy_model)) / 2
-                
-                "Make linecut"
-                #plot(noisy_model)
-                part2 = make_linecut(noisy_model, cut_height)
-                if remove_default and (flux_range[0] != 0 or flux_range[1] != self.r_outer):
-                    part2['left'] -= default_part['left']
-                    part2['right'] -= default_part['right']
-                lim2 = bin_linecut(part2, r_bounds)
-                
-                # Fit height
-                H2, lmod2 = fit_height2(lim2, self.image.radial.profile, self.image.radial.rnew, r_bounds, height_calibrators, part_generators, starting_height, self.image.xdim, intp_range)
-                
-                # Store values
-                self.HEIGHT_2['left'][i, :], self.HEIGHT_2['right'][i, :] = H2['left'][-1, :], H2['right'][-1, :]
+        ## Fit again with noise
+        for i in range(n_iterations):
             
-            # Interpolate height
-            self.rnew, HEIGHT_2_INT = interpolate(self.HEIGHT_2, self.R_BOUNDS)
+            # Don't fit with extra noise if no extra noise specified
+            if not extra_noise: continue
+            
+            # Print status
+            if verbose: print('n', i, end=' ')
+            
+            # Get annuli boundaries
+            r_bounds = self.R_BOUNDS[i]
+            
+            # Get HEIGHT_CALIBRATORS and PART_GENERATORS for all annuli
+            "HEIGHT_CALIBRATORS: mapping between h and midplane flux"
+            "PART_GENERATORS: generates midplane flux given height"
+            height_calibrators, part_generators, intp_range = make_generators(r_bounds, self.interp_heights, self.image.xdim, self.RAPID_RINGS, self.image.kernel, cut_height, testing=True)
+            
+            "Store these functions for testing"
+            self.height_calibrators = height_calibrators
+            self.part_generators = part_generators
+            self.intp_range = intp_range
+            
+            # Add noise to model
+            noise = np.random.normal(0, extra_noise, self.image.image.shape)
+            if self.image.convolve_noise:
+                noise = convolve(noise, self.image.kernel)
+            if self.image.add_blur:
+                noise = blur(noise, self.image.add_blur)
+            noisy_model = noiseless_model + noise
+            noisy_model = cut(noisy_model, self.image.y_max)
+            if self.image.flipped:
+                noisy_model = (noisy_model + rotate180(noisy_model)) / 2
+            
+            "Make linecut"
+            #plot(noisy_model)
+            part2 = make_linecut(noisy_model, cut_height)
+            if remove_default and (flux_range[0] != 0 or flux_range[1] != self.r_outer):
+                part2['left'] -= default_part['left']
+                part2['right'] -= default_part['right']
+            lim2 = bin_linecut(part2, r_bounds)
+            
+            # Fit height
+            H2, lmod2 = fit_height2(lim2, self.image.radial.profile, self.image.radial.rnew, r_bounds, height_calibrators, part_generators, starting_height, self.image.xdim, intp_range)
+            
+            # Store values
+            self.HEIGHT_2['left'][i, :], self.HEIGHT_2['right'][i, :] = H2['left'][-1, :], H2['right'][-1, :]
         
-        else:
+        # Interpolate height
+        self.rnew, HEIGHT_2_INT = interpolate(self.HEIGHT_2, self.R_BOUNDS)
+        
+        if not extra_noise:
             HEIGHT_2_INT = HEIGHT_INT
         
         ## Calculate percentiles
