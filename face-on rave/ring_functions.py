@@ -160,7 +160,7 @@ def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0):
         width_ceil = 2 * range_pixels / nrings
     else:
         width_floor = 0.3 * range_pixels / nrings
-        width_ceil = 5 * range_pixels / nrings
+        width_ceil = 3 * range_pixels / nrings
     
     while True:
         r_bounds = np.random.uniform(left_edge_pixel, right_edge_pixel, nrings-1)
@@ -203,7 +203,7 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
             
             # Compare parameters
             if nrings == float(nrings2) and str(pixel_range) == pixel_range2 and n_iterations <= float(n_interations2):
-                print('    Found stored rbounds')
+                print('    Found stored rbounds', filename)
                 found_cache = 1
                 file = open(filename, 'rb')
                 R_BOUNDS = pickle.load(file)
@@ -224,7 +224,7 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
         pickle.dump(R_BOUNDS, f)
         f.close()
         path = os.getcwd()
-        print('    Cached to', path + '\\' + filename)
+        print('    Cached to', path + '/' + filename)
         
         if timeit:
             print('    Time taken:', f'{(time.time() - t0):.0f}')
@@ -322,7 +322,7 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
         pickle.dump(RINGS, f)
         f.close()
         path = os.getcwd()
-        print('Cached to', path + '\\' + filename)
+        print('Cached to', path + '/' + filename)
         
         if timeit:
             print('    Time taken:', f'{(time.time() - t0):.0f}')
