@@ -110,7 +110,7 @@ def get_azimuthal_profile(image, inclination=0, increment=10):
 
     return profile
 
-def get_azimuthal_profile2(im, inclination=0, deltar=1):
+def get_azimuthal_profile2(im, inclination=0, deltar=1, return_count=False):
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
     distorted_image = zoom(im, [distortion_factor, 1])
     distorted_image = reshape_image(distorted_image, *im.shape) / distortion_factor
@@ -136,8 +136,11 @@ def get_azimuthal_profile2(im, inclination=0, deltar=1):
                 count[r] += 1
 
     profile = profile / count
+
     #plot(rcoord, profile)
 
+    if return_count:
+        return profile, count
     return profile
 
 def get_binned_azimuthal_profile(im, r_bounds, inclination=0):

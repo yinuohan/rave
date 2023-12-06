@@ -7,7 +7,11 @@ import time
 from scipy.ndimage import gaussian_filter as blur
 from scipy.ndimage import rotate
 from scipy.interpolate import interp1d, interp2d
-from scipy.ndimage import convolve
+
+## Convolution
+from scipy.ndimage import convolve as scipy_convolve
+def convolve(a, b):
+    return scipy_convolve(a, b, mode='constant', cval=0.0)
 
 ## Matplotlib GUI
 import matplotlib

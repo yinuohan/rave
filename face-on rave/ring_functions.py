@@ -236,7 +236,7 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
     '''Narrow annuli are used to speed up simulating ring images, because adding up narrow rings is faster than making up new rings. 
     This function reads in pre-generated narrow annuli if they exist. Otherwise it makes a new set of annuli with the right conditions and stores them. '''
     
-    if interpolate_height:      
+    if interpolate_height:
         # Vertically stretch/re-scale the set of annuli with the most similar height to approximate the annuli with the required height.
         
         "Print warning if disk is not edge-on"
