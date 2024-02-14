@@ -447,6 +447,10 @@ class MakeImage(Image):
         self.h_over_r = h_over_r
         self.interpolate_height = interpolate_height
         
+        # Normalise kernel
+        if not np.any(kernel == None):
+            kernel /= kernel.sum()
+        
         # Make image
         if verbose:
             print('Making image')

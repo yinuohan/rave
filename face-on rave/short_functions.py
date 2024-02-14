@@ -278,7 +278,7 @@ def make_kernel(dim, sigma):
     
     # Add a point and smooth
     kernel[dim//2, dim//2] = 1
-    kernel = gaussian_filter(kernel, sigma)
+    kernel = gaussian_filter(kernel, sigma, mode='constant', cval=0.0)
     
     # Normalise
     kernel = kernel/kernel.sum()
