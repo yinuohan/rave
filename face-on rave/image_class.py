@@ -660,7 +660,7 @@ class RadialProfile():
         # Get function that makes rings rapidly
         self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel, h_over_r=h_over_r)
     
-    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average', convolution_function=None):
+    def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average', convolution_function=None, largepsf=None):
         '''Fits the radial surface brightness profile.
         Input
             NRINGS: number of annuli to use. 
@@ -682,6 +682,7 @@ class RadialProfile():
         self.extra_noise = extra_noise
         self.fit_star = fit_star
         self.convolution_function = convolution_function
+        self.largepsf = largepsf
         
         # Set up variables
         dr = self.dr
@@ -728,6 +729,12 @@ class RadialProfile():
                 rings = self.rapid_rings(r_bounds, kernel=convolution_function)
             else:
                 rings = self.rapid_rings(r_bounds, kernel)
+            
+            # Change cetral annulus to large PSF if fitting star
+            if fit_star and largepsf is not None:
+                assert largepsf.shape == rings[0].shape
+                rings[0] = largepsf / largepsf.sum() * np.pi
+                
             abrl = bin_rings(rings, r_bounds, 'full')
             
             # Fit with matrix and iterative method

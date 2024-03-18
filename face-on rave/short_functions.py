@@ -326,9 +326,12 @@ def pythagoras(a, b):
 
 
 ## Noise functions
-def measure_noise(image, fwhm_x, fwhm_y, noise_sd=None, verbose=True):
+def measure_noise(image, fwhm_x, fwhm_y=None, noise_sd=None, verbose=True, return_mean=False):
     '''Measures noise per beam'''
-    beam_area = calculate_beam_area(fwhm_x, fwhm_y)
+    if fwhm_y == None:
+        beam_area = fwhm_x
+    else:
+        beam_area = calculate_beam_area(fwhm_x, fwhm_y)
     n_pixels = int(np.round(np.sqrt(beam_area)))
     all_means = []
 
@@ -351,8 +354,11 @@ def measure_noise(image, fwhm_x, fwhm_y, noise_sd=None, verbose=True):
         print('Measured noise per beam:', f'{noise_per_beam:.2f}')
         if noise_sd:
             print('Ratio between measured and inferred:', f'{noise_per_beam / inferred:.2f}')
-
-    return noise_per_beam
+    
+    if return_mean:
+        return np.mean(all_means), np.std(all_means)
+    else:
+        return noise_per_beam
 
 
 def calibrate_noise(kernel, fwhm_x, fwhm_y, verbose=False, plotit=True):
