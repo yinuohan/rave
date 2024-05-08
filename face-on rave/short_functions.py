@@ -45,11 +45,23 @@ def bnuw(wavelength, temperature):
     fact2 = k2 / (wavelength*temperature)
     return fact1 / (np.exp(fact2) - 1)
 
+def azimuth_to_scattering_angle(theta, inclination):
+    '''scattering_angle = arccos( cos(theta) * cos(pi/2 - inclination) ). All in radians.'''
+    scattering_angle = np.arccos( np.cos(theta + np.pi/2) * np.cos(np.pi - inclination) )
+    scattering_angle = scattering_angle
+    return scattering_angle
+
+def interpolate_SPF(theta, inclination, scattering_phase):
+    '''Theta is the azimuthal angle in disk. All in radians.'''
+    scattering_angle = azimuth_to_scattering_angle(theta, inclination)
+    SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1], left=0, right=0)
+    return SPF
+
 
 ## Rotation
 def rotate_x(angle):
     '''Rotate (x, y, z) coordinates about the x axis'''
-    C2 = np.zeros((3,3))
+    C2 = np.zeros((3, 3))
 
     C2[:,0] = [1, 0, 0]
     C2[:,1] = [0, np.cos(angle), np.sin(angle)]

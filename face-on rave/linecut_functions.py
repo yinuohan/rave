@@ -1,6 +1,6 @@
 #from .lib import *
 #from .short_functions import *
-
+from skimage.transform import warp_polar
 
 ## Linecut
 def make_linecut(image, cut_height='full'):
@@ -175,7 +175,7 @@ def get_binned_azimuthal_profile(im, r_bounds, inclination=0):
 
     return binned_profile
 
-def get_binned_azimuthal_profile2(im, r_bounds, inclination=0):
+def get_binned_azimuthal_profile2(im, r_bounds, inclination=0, mode='radial'):
     '''Equivalent to get_binned_azimuthal_profile but faster'''
 
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
@@ -216,3 +216,31 @@ def azimuthal_rings(rings, inclination=0):
 def azimuthal_bin_rings(rings, r_bounds, inclination=0):
     '''Apply MAKE_LINECUT then BIN_LINECUT to each element of the array RINGS.'''
     return np.array([get_binned_azimuthal_profile2(rings[i], r_bounds, inclination) for i in range(len(rings))])
+
+
+def polar_transform(image, inclination=0):
+    '''Transforms image from (x, y) to (r, phi) coordinates. phi=0 is to the right and goes counter-clockwise.'''
+    if inclination:
+        distortion_factor = 1/abs(np.cos(inclination/180*pi))
+        distorted_image = zoom(image, [distortion_factor, 1])
+        distorted_image = reshape_image(distorted_image, *image.shape) / distortion_factor
+    else:
+        distorted_image = image.copy()
+
+    from skimage.transform import warp_polar
+    y, x = distorted_image.shape
+    transformed_image = warp_polar(distorted_image, radius=min(x, y)//2)
+
+    return transformed_image
+
+
+def polar_transform_profile(image, inclination=0, mode='radial_profile'):
+    '''Gives the azimuthally averaged or radially averaged profile using the polar transformed image.'''
+    transformed_image = polar_transform(image, inclination=inclination)
+
+    if mode == 'radial_profile':
+        return transformed_image.mean(0)
+    elif mode == 'azimuthal_profile':
+        return transformed_image.mean(1)
+    else:
+        raise KeyError('Mode for polar transformed profile not recognised')

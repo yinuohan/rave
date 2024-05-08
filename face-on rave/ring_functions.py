@@ -4,7 +4,7 @@
 
 
 ## Making rings
-def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, kernel=None, n_points_per_pixel=200):
+def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, kernel=None, n_points_per_pixel=200, scattering_phase=None):
     '''Returns an image of a ring (equivalently called an annulus). 
     All units are in pixels. 
     Input:
@@ -16,6 +16,7 @@ def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, 
         DIM: dimensions of the image. Output image is always square. 
         KERNEL: the kernel to concolve the image with. None means don't convolve with anything. 
         N_POINTS_PER_PIXEL: how many points to add to the image per pixel if the ring were to be viewed face-on. The more points you add, the higher the accuracy of the image, but the slower the code will run. THIS MUST BE CONSISTENT WITH R IF R IS GIVEN. 
+        SCATTERING_PHASE: scattering phase function. 2 by N array where N is the numbero of sample points to interpolate between. First row is azimuthal angle. Second row is scattering phase. Must have been normalised already at input. 
     '''
     
     if R is None:
@@ -26,11 +27,12 @@ def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, 
     else:
         n_points = len(R)
         B_adjust = 1/n_points_per_pixel
+        
     
     Theta = np.random.uniform(0, 360, n_points)/180*np.pi
     "Avoid all points being binned to row of pixels above midplane when h = 0"
     if height == 0:
-        height = 0.001 
+        height = 0.000001 
     Z = np.random.normal(0, height, n_points)
     
     X = R * np.cos(Theta)
@@ -42,7 +44,14 @@ def make_ring(R, inner_radius, outer_radius, height=10, inclination=0, dim=200, 
         zip2 = rotate_x(inclination/180*np.pi) @ zip
     
         X, Y, Z = zip2[0], zip2[1], zip2[2]
-
+    
+    # Scattering phase function
+    if np.any(scattering_phase):
+        SPF = interpolate_SPF(Theta, inclination/180*np.pi, scattering_phase)
+        B *= SPF
+    else:
+        pass
+    
     # Bin into image
     image = np.zeros([dim, dim])
     
@@ -120,7 +129,7 @@ def generate_R(n_points_per_pixel, r_bounds):
     return R_per_ring
 
 
-def make_all_rings(r_bounds, heights, inclination, dim, n_points_per_pixel=200, kernel=None, verbose=True):
+def make_all_rings(r_bounds, heights, inclination, dim, n_points_per_pixel=200, kernel=None, scattering_phase=None, verbose=True):
     '''Makes all rings defined by R_BOUNDS.
     Input variables are defined in MAKE_RING.'''
     
@@ -138,7 +147,7 @@ def make_all_rings(r_bounds, heights, inclination, dim, n_points_per_pixel=200, 
     for iring in range(nrings-1, -1, -1):
         if verbose:
             print(iring, sep='', end=' ')
-        ring_image = make_ring(R_per_ring[iring], None, None, heights[iring], inclination, dim, kernel, n_points_per_pixel)
+        ring_image = make_ring(R_per_ring[iring], None, None, heights[iring], inclination, dim, kernel, n_points_per_pixel, scattering_phase)
         all_ring_images[iring] = ring_image
     
     return all_ring_images
@@ -232,7 +241,7 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
     return R_BOUNDS
 
 
-def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=200, timeit=True, h_over_r=False, interpolate_height=False):
+def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=200, timeit=True, h_over_r=False, interpolate_height=False, scattering_phase=None):
     '''Narrow annuli are used to speed up simulating ring images, because adding up narrow rings is faster than making up new rings. 
     This function reads in pre-generated narrow annuli if they exist. Otherwise it makes a new set of annuli with the right conditions and stores them. '''
     
@@ -274,9 +283,11 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
         height = nearest_heightval
     
     # Try stored rings
-    import pickle
     prefix = 'RapidAnnuli_'
-    suffix = '.python'
+    if np.any(scattering_phase):
+        suffix = '_spf.python'
+    else:
+        suffix = '.python'
     found_cache = 0
     
     if h_over_r:
@@ -286,24 +297,29 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
             height = int(height)
         heightname = str(height)
     
-    for filename in os.listdir():
-        if prefix in filename:
-
-            # Remove prefix and suffix and get parameters
-            filename2 = filename.replace(prefix, '').replace(suffix, '')
-            dim2, n_points_per_pixel2, height2, inclination2, r_outer2, dr2 = [element for element in filename2.split('_')]
-            
-            # Compare parameters
-            if [dim, heightname, inclination, dr] == [float(dim2), height2, float(inclination2), float(dr2)] and r_outer <= float(r_outer2):
-                print('    Found stored rings', filename2)
-                found_cache = 1
-                file = open(filename, 'rb')
-                RINGS = pickle.load(file)
-                file.close()
-                break
+    if not np.any(scattering_phase):
+        "Storing rapid annuli with scattering phase function not supported"
+        
+        import pickle
+        
+        for filename in os.listdir():
+            if prefix in filename:
+    
+                # Remove prefix and suffix and get parameters
+                filename2 = filename.replace(prefix, '').replace(suffix, '')
+                dim2, n_points_per_pixel2, height2, inclination2, r_outer2, dr2 = [element for element in filename2.split('_')]
+                
+                # Compare parameters
+                if [dim, heightname, inclination, dr] == [float(dim2), height2, float(inclination2), float(dr2)] and r_outer <= float(r_outer2):
+                    print('    Found stored rings', filename2)
+                    found_cache = 1
+                    file = open(filename, 'rb')
+                    RINGS = pickle.load(file)
+                    file.close()
+                    break
     
     # Otherwise make rings
-    if not found_cache:
+    if np.any(scattering_phase) or not found_cache:
         print('    Making rapid rings')
         filename = f'{prefix}{dim}_{n_points_per_pixel}_{heightname}_{inclination}_{r_outer}_{dr}{suffix}'
         print('    ' + filename)
@@ -313,16 +329,20 @@ def get_narrow_annuli(r_outer, dr, height, inclination, dim, n_points_per_pixel=
         r_centre = (r_bounds_make[1: ] + r_bounds_make[ :-1]) / 2
         
         if h_over_r:
-            RINGS = make_all_rings(r_bounds_make, r_centre * height, inclination, dim, n_points_per_pixel, kernel=None)
+            RINGS = make_all_rings(r_bounds_make, r_centre * height, inclination, dim, n_points_per_pixel, kernel=None, scattering_phase=scattering_phase)
         else:
-            RINGS = make_all_rings(r_bounds_make, height, inclination, dim, n_points_per_pixel, kernel=None)
+            RINGS = make_all_rings(r_bounds_make, height, inclination, dim, n_points_per_pixel, kernel=None, scattering_phase=scattering_phase)
         
         # Store rings
-        f = open(filename, 'wb')
-        pickle.dump(RINGS, f)
-        f.close()
-        path = os.getcwd()
-        print('Cached to', path + '/' + filename)
+        if np.any(scattering_phase):
+            print('Rapid annnli not stored because scattering phase function is used')
+            
+        else:
+            f = open(filename, 'wb')
+            pickle.dump(RINGS, f)
+            f.close()
+            path = os.getcwd()
+            print('Cached to', path + '/' + filename)
         
         if timeit:
             print('    Time taken:', f'{(time.time() - t0):.0f}')

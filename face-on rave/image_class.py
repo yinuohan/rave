@@ -223,7 +223,7 @@ class Image():
         #plt.tight_layout()
         plt.show()
     
-    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=False, use_kernel=True, add_before_convolve=True, default_height=None, direction='average', floor_to_0=True, interpolate_height=False):
+    def make_model(self, inclination=90, heights=0, h_over_r=True, n_points_per_pixel=200, rapid=False, use_kernel=True, add_before_convolve=True, default_height=None, direction='average', floor_to_0=True, interpolate_height=False, scattering_phase=None):
         '''Makes a model of the image.
         Must be performed after radial profile is fitted so that SELF.RADIAL.PROFILE and SELF.RADIAL.RNEW exist. 
         Input
@@ -284,7 +284,7 @@ class Image():
         else:
             kernel = None
         
-        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve, convolution_function=self.radial.convolution_function, h_over_r=h_over_r, interpolate_height=interpolate_height)
+        self.model = MakeImage(r_bounds_make, weights_make, heights_make, inclination, self.xdim, n_points_per_pixel, kernel, scale=self.scale, rapid=rapid, add_before_convolve=add_before_convolve, convolution_function=self.radial.convolution_function, h_over_r=h_over_r, interpolate_height=interpolate_height, scattering_phase=scattering_phase)
     
     def plot_compare(self, cut_height=10, unit='pixel', direction='average'):
         '''Makes a plot to compare the full 1D flux and midplane flux between the observation and best-fit model.'''
@@ -418,7 +418,7 @@ class Image():
 class MakeImage(Image):
     '''Use this class to make up an image for testing'''
     
-    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True, convolution_function=None, h_over_r=False, interpolate_height=False):
+    def __init__(self, r_bounds_make, weights_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, scale=1, rapid=False, add_before_convolve=True, verbose=True, convolution_function=None, h_over_r=False, interpolate_height=False, scattering_phase=None):
         '''Specify parameters used to make up the image.
         All units are in pixels. 
         Input:
@@ -446,6 +446,7 @@ class MakeImage(Image):
         self.scale = scale
         self.h_over_r = h_over_r
         self.interpolate_height = interpolate_height
+        self.SPF = scattering_phase
         
         # Normalise kernel
         if not np.any(kernel == None):
@@ -460,9 +461,9 @@ class MakeImage(Image):
                 r = (r_bounds_make[:-1] + r_bounds_make[1:]) / 2
                 heights_make = heights_make * r
             if not add_before_convolve:
-                rings_make = make_all_rings(r_bounds_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, verbose=verbose)
+                rings_make = make_all_rings(r_bounds_make, heights_make, inclination_make, dim, n_points_per_pixel, kernel, verbose=verbose, scattering_phase=scattering_phase)
             else:
-                rings_make = make_all_rings(r_bounds_make, heights_make, inclination_make, dim, n_points_per_pixel, None, verbose=verbose)
+                rings_make = make_all_rings(r_bounds_make, heights_make, inclination_make, dim, n_points_per_pixel, None, verbose=verbose, scattering_phase=scattering_phase)
             if verbose:
                 print('Time taken:', f'{(time.time() - t0):.0f}')
         else:
@@ -491,7 +492,7 @@ class MakeImage(Image):
         '''Load the rapid annuli used to generate the fake image.'''
         print('\n----- Make image annuli -----')
         
-        self.rapid_rings = get_narrow_annuli(self.dim//2, dr, self.heights_make, self.inclination_make, self.dim, self.n_points_per_pixel, h_over_r=self.h_over_r, interpolate_height=self.interpolate_height)
+        self.rapid_rings = get_narrow_annuli(self.dim//2, dr, self.heights_make, self.inclination_make, self.dim, self.n_points_per_pixel, h_over_r=self.h_over_r, interpolate_height=self.interpolate_height, scattering_phase=self.SPF)
     
 
 class LoadImage(MakeImage):
@@ -641,7 +642,7 @@ class RadialProfile():
         plt.tight_layout()
         plt.show()
     
-    def get_rapid_annuli(self, r_outer, dr=0.1, height=10, inclination=90, points_per_pixel=200, h_over_r=False):
+    def get_rapid_annuli(self, r_outer, dr=0.1, height=10, inclination=90, points_per_pixel=200, h_over_r=False, scattering_phase=None):
         '''Gets narrow annuli with the required properties. 
         Input:
             R_OUTER: outermost radial location with flux to fit to. 
@@ -656,9 +657,10 @@ class RadialProfile():
         self.h_over_r = h_over_r
         self.inclination = inclination
         self.points_per_pixel = points_per_pixel
+        self.SPF = scattering_phase
         
         # Get function that makes rings rapidly
-        self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel, h_over_r=h_over_r)
+        self.rapid_rings = get_narrow_annuli(r_outer, dr, height, inclination, self.image.xdim, points_per_pixel, h_over_r=h_over_r, scattering_phase=self.SPF)
     
     def fit(self, nrings, n_iterations=100, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, direction='average', convolution_function=None, largepsf=None):
         '''Fits the radial surface brightness profile.
@@ -669,7 +671,8 @@ class RadialProfile():
             RANDOM: whether or not to randomly pick annuli boundaries if there are more sets of stored annuli boundaries than needed. 
             FIT_STAR: if True, then adds an annulus that occupies the first pixel to fit to the flux of the star. 
             FLOOR_TO_0: whether or not to set all fitted values below 0 to 0. 
-            MODEL_DIRECTION: which side of the radial profile to use to make the best-fit model when fitting to the best-fit model plus noise. '''
+            MODEL_DIRECTION: which side of the radial profile to use to make the best-fit model when fitting to the best-fit model plus noise. 
+            SCATTERING PHASE: scattering phase function. See MAKE_RING in ring_functions.py for details. '''
         
         ## Preparation
         print('\n----- Radial Fit -----')
@@ -683,6 +686,7 @@ class RadialProfile():
         self.fit_star = fit_star
         self.convolution_function = convolution_function
         self.largepsf = largepsf
+        self.SPF = scattering_phase
         
         # Set up variables
         dr = self.dr
