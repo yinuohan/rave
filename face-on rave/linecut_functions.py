@@ -89,7 +89,9 @@ def bin_rings(rings, r_bounds, cut_height='full'):
 
 ## Azimuthal profiles
 def get_azimuthal_profile(image, inclination=0, increment=10):
-    '''Takes in an image and returns the azimuthally averaged radial profile assuming the given inclination.
+    '''Don't use.
+    Takes in an image and returns the azimuthally averaged radial profile assuming the given inclination.
+    Stretches image then rotates image around to take vertical stripes.
     All units in pixels.'''
 
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
@@ -111,6 +113,7 @@ def get_azimuthal_profile(image, inclination=0, increment=10):
     return profile
 
 def get_azimuthal_profile2(im, inclination=0, deltar=1, return_count=False):
+    '''Stretches image then counts flux in circle.'''
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
     distorted_image = zoom(im, [distortion_factor, 1])
     distorted_image = reshape_image(distorted_image, *im.shape) / distortion_factor
@@ -144,7 +147,7 @@ def get_azimuthal_profile2(im, inclination=0, deltar=1, return_count=False):
     return profile
 
 def get_binned_azimuthal_profile(im, r_bounds, inclination=0):
-    '''Equivalent to get_azimuthal_profile2 but slower.'''
+    '''Stretches image then counts flux in circle. Equivalent to get_azimuthal_profile2 but slower.'''
 
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
     distorted_image = zoom(im, [distortion_factor, 1])
@@ -175,8 +178,8 @@ def get_binned_azimuthal_profile(im, r_bounds, inclination=0):
 
     return binned_profile
 
-def get_binned_azimuthal_profile2(im, r_bounds, inclination=0, mode='radial'):
-    '''Equivalent to get_binned_azimuthal_profile but faster'''
+def get_binned_azimuthal_profile2(im, r_bounds, inclination=0):
+    '''Counts flux in ellipses. Equivalent to get_binned_azimuthal_profile but faster.'''
 
     distortion_factor = 1/abs(np.cos(inclination/180*pi))
 
@@ -201,12 +204,19 @@ def get_binned_azimuthal_profile2(im, r_bounds, inclination=0, mode='radial'):
         if len(values) == 0:
             print('Warning: R_bounds too closely spaced! Trying slower method')
             "When inclination is large and r_bounds is closely spaced, there may be no pixels that fall within an annulus. In this case, use the slower method which first transforms the image, effectively interpolating between the pixels."
-            return get_binned_azimuthal_profile(im, r_bounds, inclination=0)
+            return get_binned_azimuthal_profile(im, r_bounds, inclination=inclination)
         else:
             binned_profile[i] = values.mean() / distortion_factor
         "Adjusted by distortion_factor to get value per pixel if viewed face-on"
 
     return binned_profile
+
+def get_binned_azimuthal_profile3(im, r_bounds, inclination=0):
+    '''Transforms image into polar coordinates first.'''
+
+    azimuthally_averaged_radial_profile = polar_transform_profile(im, inclination=inclination, mode='radial_profile')
+
+    return bin_linecut(azimuthally_averaged_radial_profile, r_bounds)
 
 def azimuthal_rings(rings, inclination=0):
     '''Apply MAKE_LINECUT to each element of the list RINGS'''

@@ -47,7 +47,7 @@ def bnuw(wavelength, temperature):
 
 def azimuth_to_scattering_angle(theta, inclination):
     '''scattering_angle = arccos( cos(theta) * cos(pi/2 - inclination) ). All in radians.'''
-    scattering_angle = np.arccos( np.cos(theta + np.pi/2) * np.cos(np.pi - inclination) )
+    scattering_angle = np.arccos( np.cos(theta + np.pi/2) * np.cos(np.pi/2 - inclination) )
     scattering_angle = scattering_angle
     return scattering_angle
 

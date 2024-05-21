@@ -686,7 +686,6 @@ class RadialProfile():
         self.fit_star = fit_star
         self.convolution_function = convolution_function
         self.largepsf = largepsf
-        self.SPF = scattering_phase
         
         # Set up variables
         dr = self.dr
