@@ -192,7 +192,7 @@ class Image():
         store_image = StoreImage(self)
         store(store_image, filename)
     
-    def plot(self, unit='pixel'):
+    def plot(self, unit='pixel', reverse_x_axis=False, figsize=(6, 5)):
         '''Plots image'''
         cy2, cx2 = self.cy + 0.5, self.cx + 0.5
         unit_label = 'pixels'
@@ -213,8 +213,11 @@ class Image():
                 down /= self.beam_fwhm
                 up /= self.beam_fwhm
             unit_label = 'beam FWHMs'
-        plt.figure(figsize=(6, 5))
-        plt.imshow(self.image, extent=[-cx2, cx2, -cy2, cy2], origin='lower')
+        plt.figure(figsize=figsize)
+        if reverse_x_axis:
+            plt.imshow(self.image, extent=[cx2, -cx2, -cy2, cy2], origin='lower')
+        else:
+            plt.imshow(self.image, extent=[-cx2, cx2, -cy2, cy2], origin='lower')
         
         plt.xlabel(f'Distance ({unit_label})')
         plt.ylabel(f'Distance ({unit_label})')
@@ -324,8 +327,8 @@ class Image():
             plt.show()
     
         elif self.radial.mode == 'face-on':
-            image_profile = get_azimuthal_profile2(self.image, self.radial.inclination)
-            model_profile = get_azimuthal_profile2(self.model.image, self.radial.inclination)
+            image_profile = get_azimuthal_profile2(self.image, self.radial.inclination, phi_range=self.radial.phi_range)
+            model_profile = get_azimuthal_profile2(self.model.image, self.radial.inclination, phi_range=self.radial.phi_range)
             
             plt.figure()
             plt.plot(r, image_profile, '--', label='Data: azimuthally averaged profile')
@@ -825,7 +828,7 @@ class RadialProfile():
         
         print('Time taken:', f'{(time.time() - t0):.0f}')
     
-    def afit(self, nrings, n_iterations=100, inclination=0, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, convolution_function=None):
+    def afit(self, nrings, n_iterations=100, inclination=0, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, convolution_function=None, phi_range=None):
         '''Fits the radial surface brightness profile for a more face-on disk.
         Input
             NRINGS: number of annuli to use. 
@@ -847,6 +850,7 @@ class RadialProfile():
         self.extra_noise = extra_noise
         self.fit_star = fit_star
         self.convolution_function = convolution_function
+        self.phi_range = phi_range
         
         # Set up variables
         dr = self.dr
@@ -892,10 +896,10 @@ class RadialProfile():
                 rings = self.rapid_rings(r_bounds, kernel=convolution_function)
             else:
                 rings = self.rapid_rings(r_bounds, kernel)
-            abrl = azimuthal_bin_rings(rings, r_bounds, inclination)
+            abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range)
             
             # Fit with matrix and iterative method
-            L = get_binned_azimuthal_profile2(self.image.image, r_bounds, inclination=inclination)
+            L = get_binned_azimuthal_profile2(self.image.image, r_bounds, inclination=inclination, phi_range=phi_range)
             mtxratios, _ = matrix_fit(L, abrl)
         
             # Store values
@@ -921,7 +925,7 @@ class RadialProfile():
                 # Make annuli
                 r_bounds = self.R_BOUNDS[i]
                 rings = self.rapid_rings(r_bounds, kernel)
-                abrl = azimuthal_bin_rings(rings, r_bounds, inclination)
+                abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range)
             
                 # Add noise to model
                 noise = np.random.normal(0, extra_noise, self.image.image.shape)
@@ -935,7 +939,7 @@ class RadialProfile():
                     noisy_model = (noisy_model + rotate180(noisy_model)) / 2
                 
                 # Fit with matrix method
-                L2 = get_binned_azimuthal_profile2(noisy_model, r_bounds, inclination=inclination)
+                L2 = get_binned_azimuthal_profile2(noisy_model, r_bounds, inclination=inclination, phi_range=phi_range)
                 mtxratios2, _ = matrix_fit(L2, abrl)
             
                 # Store values
