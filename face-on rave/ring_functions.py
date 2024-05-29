@@ -155,21 +155,29 @@ def make_all_rings(r_bounds, heights, inclination, dim, n_points_per_pixel=200, 
 
 
 ## Other rings functions
-def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0):
+def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0, feature_region=None, min_width=None):
     '''Makes boundaries for NRINGS number of annuli between LEFT_EDGE_PIXEL and RIGHT_EDGE_PIXEL.
-    Satisfied the conditions that make sure each annulus isn't too wide or narrow.'''
+    Satisfied the conditions that make sure each annulus isn't too wide or narrow.
+    FEATURE_REGION is a list with 3 elements. The first two are the lower and upper bounds of the region. The third is the number of annuli to split it into.'''
     assert right_edge_pixel > left_edge_pixel
     range_pixels = right_edge_pixel - left_edge_pixel
 
     #width_floor = max(0.1 * range_pixels / nrings, 1)
     #width_ceil = 5 * range_pixels / nrings
     
-    if nrings <= 20 and range_pixels/nrings >= 5:
-        width_floor = 0.3 * range_pixels / nrings
-        width_ceil = 2 * range_pixels / nrings
+    if min_width == None:
+        if nrings <= 20 and range_pixels/nrings >= 5:
+            width_floor = max(0.3 * range_pixels / nrings, 1)
+            width_ceil = 2 * range_pixels / nrings
+        elif nrings <= 30:
+            width_floor = max(0.3 * range_pixels / nrings, 1)
+            width_ceil = 3 * range_pixels / nrings
+        else:
+            width_floor = 1
+            width_ceil = 3 * range_pixels / nrings
     else:
-        width_floor = 0.3 * range_pixels / nrings
-        width_ceil = 3 * range_pixels / nrings
+        width_floor = min_width
+        width_ceil = np.inf
     
     while True:
         r_bounds = np.random.uniform(left_edge_pixel, right_edge_pixel, nrings-1)
@@ -178,10 +186,41 @@ def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0):
         r_widths = np.diff(r_bounds)
         if len(np.where((r_widths > width_ceil)|(r_widths < width_floor))[0]) == 0:
             break
+    
+    '''
+    if np.any(feature_region):
+        feature_lo, feature_hi = feature_region[0], feature_region[1]
+        r_bounds_new = [r_bounds[0]]
+        for i in range(len(r_bounds)-1):
+            if not( np.all(r_bounds[i:i+2] < feature_lo) or np.all(r_bounds[i:i+2] > feature_hi) ) and (r_bounds[i+1] - r_bounds[i] > 2):
+                "If the interval overlaps with feature_region by any amount at all"
+                nsplit = 3
+                r_bounds_new += list(np.linspace(r_bounds[i], r_bounds[i+1], num=nsplit+1)[1:])
+            else:
+                r_bounds_new.append(r_bounds[i+1])
+        r_bounds = np.array(r_bounds_new)
+    '''
+    if np.any(feature_region):
+        feature_lo, feature_hi = feature_region[0], feature_region[1]
+        i_lower, i_upper = [], []
+        for i in range(len(r_bounds)-1):
+            if r_bounds[i] <= feature_lo and r_bounds[i+1] >= feature_lo:
+                i_lower.append(i)
+            if r_bounds[i] <= feature_hi and r_bounds[i+1] >= feature_hi:
+                i_upper.append(i+1)
+        assert len(i_lower) == 1 and len(i_upper) == 1
+        
+        nsplit = feature_region[2]
+        assert (feature_region[1] - feature_region[0]) / nsplit >= 1, 'R_bounds too closely spaced'
+        
+        insert_r_bounds = generate_r_bounds(nsplit, right_edge_pixel=r_bounds[i_upper[0]], left_edge_pixel=r_bounds[i_lower[0]], feature_region=None, min_width=0.5)
+        
+        r_bounds = np.r_[r_bounds[:i_lower[0]], insert_r_bounds, r_bounds[i_upper[0]+1:]]
+    
     return r_bounds
 
 
-def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_range=False):
+def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_range=False, feature_region=None):
     '''Reads in pre-generated R_BOUNDS if it exists. Otherwise makes a new set of R_BOUNDS with the right conditions and stores it. '''
     
     # Try stored rbounds
@@ -203,30 +242,33 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
         left_edge_pixel = 0
         pixel_range = right_edge_pixel
     
-    for filename in os.listdir():
-        if prefix in filename:
-            
-            # Remove prefix and suffix and get parameters
-            filename2 = filename.replace(prefix, '').replace(suffix, '')
-            nrings2, pixel_range2, n_interations2 = filename2.split('_')
-            
-            # Compare parameters
-            if nrings == float(nrings2) and str(pixel_range) == pixel_range2 and n_iterations <= float(n_interations2):
-                print('    Found stored rbounds', filename)
-                found_cache = 1
-                file = open(filename, 'rb')
-                R_BOUNDS = pickle.load(file)
-                file.close()
-                break
+    if not np.any(feature_region):
+        for filename in os.listdir():
+            if prefix in filename:
+                
+                # Remove prefix and suffix and get parameters
+                filename2 = filename.replace(prefix, '').replace(suffix, '')
+                nrings2, pixel_range2, n_interations2 = filename2.split('_')
+                
+                # Compare parameters
+                if nrings == float(nrings2) and str(pixel_range) == pixel_range2 and n_iterations <= float(n_interations2):
+                    print('    Found stored rbounds', filename)
+                    found_cache = 1
+                    file = open(filename, 'rb')
+                    R_BOUNDS = pickle.load(file)
+                    file.close()
+                    break
     
     # Otherwise make rbounds
-    if not found_cache:
+    if not found_cache and not np.any(feature_region):
         print('    Making rbounds')
         t0 = time.time()
         
         R_BOUNDS = np.zeros([n_iterations, nrings+1])
         for i in range(n_iterations):
-            R_BOUNDS[i] = generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel)
+            if nrings > 30:
+                print(i, sep='', end=' ')
+            R_BOUNDS[i] = generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel, feature_region=feature_region)
         
         filename = f'{prefix}{nrings}_{pixel_range}_{n_iterations}{suffix}' 
         f = open(filename, 'wb')
@@ -234,6 +276,22 @@ def get_r_bounds(nrings, right_edge_pixel, n_iterations, timeit=True, use_flux_r
         f.close()
         path = os.getcwd()
         print('    Cached to', path + '/' + filename)
+        
+        if timeit:
+            print('    Time taken:', f'{(time.time() - t0):.0f}')
+    
+    elif np.any(feature_region):
+        print('    Making rbounds')
+        t0 = time.time()
+        
+        R_BOUNDS = []
+        for i in range(n_iterations):
+            if nrings > 30:
+                print(i, sep='', end=' ')
+            R_BOUNDS.append(generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel, feature_region=feature_region))
+        
+        filename = f'{prefix}{nrings}_{pixel_range}_{n_iterations}{suffix}' 
+        print(filename, 'R_bounds not cached because feature_region is used')
         
         if timeit:
             print('    Time taken:', f'{(time.time() - t0):.0f}')

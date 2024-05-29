@@ -828,7 +828,7 @@ class RadialProfile():
         
         print('Time taken:', f'{(time.time() - t0):.0f}')
     
-    def afit(self, nrings, n_iterations=100, inclination=0, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, convolution_function=None, phi_range=None):
+    def afit(self, nrings, n_iterations=100, inclination=0, extra_noise=0, random=True, verbose=True, fit_star=False, floor_to_0=True, convolution_function=None, phi_range=None, feature_region=None):
         '''Fits the radial surface brightness profile for a more face-on disk.
         Input
             NRINGS: number of annuli to use. 
@@ -851,6 +851,11 @@ class RadialProfile():
         self.fit_star = fit_star
         self.convolution_function = convolution_function
         self.phi_range = phi_range
+        self.feature_region = feature_region
+        if np.any(feature_region):
+            interpolate_subpixel = True
+        else:
+            interpolate_subpixel = False
         
         # Set up variables
         dr = self.dr
@@ -859,23 +864,29 @@ class RadialProfile():
         
         # Get annuli boundaries
         if not fit_star:
-            self.R_BOUNDS = get_r_bounds(self.nrings, self.r_outer, n_iterations)
+            self.R_BOUNDS = get_r_bounds(self.nrings, self.r_outer, n_iterations, feature_region=feature_region)
         else:
             "Include an additional ring with radius = 1 pixel"
-            R_BOUNDS = get_r_bounds(self.nrings, [1, self.r_outer], n_iterations, use_flux_range=True)
+            R_BOUNDS = get_r_bounds(self.nrings, [1, self.r_outer], n_iterations, use_flux_range=True, feature_region=feature_region)
             R_BOUNDS2 = np.zeros([len(R_BOUNDS), ndim+1])
             for i in range(len(R_BOUNDS)):
                 R_BOUNDS2[i] = np.r_[0, R_BOUNDS[i]]
             self.R_BOUNDS = R_BOUNDS2
         
         # Set up storing variables
-        self.R_BOUNDS = np.round(self.R_BOUNDS / dr) * dr
-        self.MTXRATIOS = handlelr(np.zeros)([n_iterations, ndim])
-        "fitted with extra noise"
-        self.RATIOS_2 = handlelr(np.zeros)([n_iterations, ndim]) 
+        if np.any(feature_region):
+            self.R_BOUNDS = [np.round(self.R_BOUNDS[i] / dr) * dr for i in range(len(self.R_BOUNDS))]
+            self.MTXRATIOS = createlr([])
+            "fitted with extra noise"
+            #self.RATIOS_2 = createlr([])
+        else:
+            self.R_BOUNDS = np.round(self.R_BOUNDS / dr) * dr
+            self.MTXRATIOS = handlelr(np.zeros)([n_iterations, ndim])
+            "fitted with extra noise"
+            self.RATIOS_2 = handlelr(np.zeros)([n_iterations, ndim])
         
         # Pick subset of boundaries to use 
-        if random:
+        if random and not np.any(feature_region):
             indices = np.random.choice(len(self.R_BOUNDS), n_iterations, replace=False)
             self.R_BOUNDS = self.R_BOUNDS[indices]
         else:
@@ -896,14 +907,18 @@ class RadialProfile():
                 rings = self.rapid_rings(r_bounds, kernel=convolution_function)
             else:
                 rings = self.rapid_rings(r_bounds, kernel)
-            abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range)
+            abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range, interpolate_subpixel=interpolate_subpixel)
             
             # Fit with matrix and iterative method
-            L = get_binned_azimuthal_profile2(self.image.image, r_bounds, inclination=inclination, phi_range=phi_range)
+            L = get_binned_azimuthal_profile2(self.image.image, r_bounds, inclination=inclination, phi_range=phi_range, interpolate_subpixel=interpolate_subpixel)
             mtxratios, _ = matrix_fit(L, abrl)
         
             # Store values
-            self.MTXRATIOS['left'][i], self.MTXRATIOS['right'][i] = mtxratios, mtxratios
+            if np.any(feature_region):
+                self.MTXRATIOS['left'].append(mtxratios)
+                self.MTXRATIOS['right'].append(mtxratios)
+            else:
+                self.MTXRATIOS['left'][i], self.MTXRATIOS['right'][i] = mtxratios, mtxratios
             
         # Interpolate points
         self.rnew, INTERPOLATED = interpolate(self.MTXRATIOS, self.R_BOUNDS)
@@ -912,7 +927,7 @@ class RadialProfile():
         self.profile = handlelr(np.median)(INTERPOLATED, axis=0)
         
         ## Fit again with noise     
-        if extra_noise:
+        if extra_noise and not np.any(feature_region):
             # Generate noiseless model
             self.image.make_model(inclination=0, heights=0, direction=direction)
             noiseless_model = self.image.model.image
@@ -925,7 +940,7 @@ class RadialProfile():
                 # Make annuli
                 r_bounds = self.R_BOUNDS[i]
                 rings = self.rapid_rings(r_bounds, kernel)
-                abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range)
+                abrl = azimuthal_bin_rings(rings, r_bounds, inclination, phi_range=phi_range, interpolate_subpixel=interpolate_subpixel)
             
                 # Add noise to model
                 noise = np.random.normal(0, extra_noise, self.image.image.shape)
@@ -939,17 +954,18 @@ class RadialProfile():
                     noisy_model = (noisy_model + rotate180(noisy_model)) / 2
                 
                 # Fit with matrix method
-                L2 = get_binned_azimuthal_profile2(noisy_model, r_bounds, inclination=inclination, phi_range=phi_range)
+                L2 = get_binned_azimuthal_profile2(noisy_model, r_bounds, inclination=inclination, phi_range=phi_range, interpolate_subpixel=interpolate_subpixel)
                 mtxratios2, _ = matrix_fit(L2, abrl)
             
                 # Store values
                 self.RATIOS_2['left'][i], self.RATIOS_2['right'][i] = mtxratios2, mtxratios2
-        
-        if not extra_noise:
-            self.RATIOS_2 = self.MTXRATIOS
             
-        # Interpolate points        
-        self.rnew, INTERPOLATED2 = interpolate(self.RATIOS_2, self.R_BOUNDS)
+            # Interpolate points
+            self.rnew, INTERPOLATED2 = interpolate(self.RATIOS_2, self.R_BOUNDS)
+        
+        else:
+            self.RATIOS_2 = self.MTXRATIOS
+            self.rnew, INTERPOLATED2 = self.rnew, INTERPOLATED
         
         ## Calculate percentiles
         quantile_range = 0.34

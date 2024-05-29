@@ -55,6 +55,8 @@ def interpolate_SPF(theta, inclination, scattering_phase):
     '''Theta is the azimuthal angle in disk. All in radians.'''
     scattering_angle = azimuth_to_scattering_angle(theta, inclination)
     SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1], left=0, right=0)
+    if np.any(SPF = np.nan):
+        print('*** Scattering phase function contains np.nan! ***')
     return SPF
 
 
@@ -188,9 +190,10 @@ def createlr(*args):
     If input two arguments, then assign them to LEFT and RIGHT respectively.'''
     assert len(args) <= 2
     if len(args) == 1:
+        import copy
         return {
         'left': args[0],
-        'right': args[0]
+        'right':copy.copy(args[0])
         }
     else:
         return {
@@ -409,15 +412,19 @@ def interpolate(RATIOS, R_BOUNDS, newpoints=1000):
     Output
         RNEW: an array of length NEWPOINTS linearly spaced between the smallest and largest values of R_BOUNDS. 
         INTERPOLATED: interpolated version of RATIOS. Each key has an array of size N_ITERATIONS * NEWPOINTS.''' 
-    rnew = np.linspace(R_BOUNDS[:,0].max(), R_BOUNDS[:,-1].min(), newpoints)
+    #rnew = np.linspace(R_BOUNDS[:,0].max(), R_BOUNDS[:,-1].min(), newpoints)
+    rnew = np.linspace(R_BOUNDS[0][0], R_BOUNDS[0][-1], newpoints)
     assert type(RATIOS) is dict, 'RATIOS needs to be dict'
-    n_iterations = RATIOS['left'].shape[0]
+    #n_iterations = RATIOS['left'].shape[0]
+    n_iterations = len(RATIOS['left'])
     INTERPOLATED = handlelr(np.zeros)([n_iterations, newpoints])
     
     for i in range(n_iterations):                
-        f = interp1d(R_BOUNDS[i], np.r_[RATIOS['left'][i], RATIOS['left'][i, -1]], kind='zero')
+        #f = interp1d(R_BOUNDS[i], np.r_[RATIOS['left'][i], RATIOS['left'][i, -1]], kind='zero')
+        f = interp1d(R_BOUNDS[i], np.r_[RATIOS['left'][i], RATIOS['left'][i][-1]], kind='zero')
         INTERPOLATED['left'][i] = f(rnew)
     
-        f = interp1d(R_BOUNDS[i], np.r_[RATIOS['right'][i], RATIOS['right'][i, -1]], kind='zero')
+        #f = interp1d(R_BOUNDS[i], np.r_[RATIOS['right'][i], RATIOS['right'][i, -1]], kind='zero')
+        f = interp1d(R_BOUNDS[i], np.r_[RATIOS['right'][i], RATIOS['right'][i][-1]], kind='zero')
         INTERPOLATED['right'][i] = f(rnew)
     return rnew, INTERPOLATED
