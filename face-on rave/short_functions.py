@@ -55,7 +55,7 @@ def interpolate_SPF(theta, inclination, scattering_phase):
     '''Theta is the azimuthal angle in disk. All in radians.'''
     scattering_angle = azimuth_to_scattering_angle(theta, inclination)
     SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1], left=0, right=0)
-    if np.any(SPF = np.nan):
+    if np.any(SPF == np.nan):
         print('*** Scattering phase function contains np.nan! ***')
     return SPF
 

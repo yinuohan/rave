@@ -316,7 +316,8 @@ def polar_transform_profile(image, inclination=0, mode='radial_profile', phi_ran
     transformed_image, mask_out = polar_transform(image, inclination=inclination, phi_range=phi_range)
 
     if mode == 'radial_profile':
-        transformed_image = transformed_image[~mask_out]
+        not_nan_rows = [irow for irow in range(len(transformed_image)) if not np.any(np.isnan(transformed_image[irow]))]
+        transformed_image = transformed_image[not_nan_rows]
     else:
         transformed_image[mask_out] = np.nan
 
