@@ -51,10 +51,13 @@ def azimuth_to_scattering_angle(theta, inclination):
     scattering_angle = scattering_angle
     return scattering_angle
 
-def interpolate_SPF(theta, inclination, scattering_phase):
+def interpolate_SPF(theta, inclination, scattering_phase, interpolate_outside=True):
     '''Theta is the azimuthal angle in disk. All in radians.'''
     scattering_angle = azimuth_to_scattering_angle(theta, inclination)
-    SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1], left=0, right=0)
+    if interpolate_outside:
+        SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1])
+    else:
+        SPF = np.interp(scattering_angle, scattering_phase[0], scattering_phase[1], left=0, right=0)
     if np.any(SPF == np.nan):
         print('*** Scattering phase function contains np.nan! ***')
     return SPF
@@ -427,4 +430,12 @@ def interpolate(RATIOS, R_BOUNDS, newpoints=1000):
         #f = interp1d(R_BOUNDS[i], np.r_[RATIOS['right'][i], RATIOS['right'][i, -1]], kind='zero')
         f = interp1d(R_BOUNDS[i], np.r_[RATIOS['right'][i], RATIOS['right'][i][-1]], kind='zero')
         INTERPOLATED['right'][i] = f(rnew)
+    
+    "Remove any np.nan"
+    not_nan_rows = [irow for irow in range(len(INTERPOLATED['left'])) if not np.any(np.isnan(INTERPOLATED['left'][irow]))]
+    INTERPOLATED['left'] = INTERPOLATED['left'][not_nan_rows]
+    
+    not_nan_rows = [irow for irow in range(len(INTERPOLATED['right'])) if not np.any(np.isnan(INTERPOLATED['right'][irow]))]
+    INTERPOLATED['right'] = INTERPOLATED['right'][not_nan_rows]
+    
     return rnew, INTERPOLATED

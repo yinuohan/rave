@@ -189,7 +189,10 @@ def get_binned_azimuthal_profile(im, r_bounds, inclination=0, phi_range=None):
         mask = (rr > r_lower) & (rr < r_upper)
         if np.any(phi_range):
             mask &= phi_mask
-
+            #"Sometimes there are only a few central pixels in central radial bin and all of them are excluded by phi_range to give np.nan in the radial profile. In that case, assume those central pixels are fine to avoid numerical issues damaging the radial profile."
+            #test_mask = mask &= phi_mask
+            #if np.sum(mask &= phi_mask) > 0:
+            #    mask = test_mask
         #plot(mask)
         values = distorted_image[mask]
         binned_profile[i] = values.mean()
@@ -289,14 +292,18 @@ def azimuthal_bin_rings(rings, r_bounds, inclination=0, phi_range=None, interpol
     '''Apply MAKE_LINECUT then BIN_LINECUT to each element of the array RINGS.'''
     return np.array([get_binned_azimuthal_profile2(rings[i], r_bounds, inclination, phi_range=phi_range, interpolate_subpixel=interpolate_subpixel) for i in range(len(rings))])
 
-def polar_transform(image, inclination=0, phi_range=None):
-    '''Transforms image from (x, y) to (r, phi) coordinates. phi=0 is to the right and goes counter-clockwise.'''
+def distort_image(image, inclination=0):
     if inclination:
         distortion_factor = 1/abs(np.cos(inclination/180*pi))
         distorted_image = zoom(image, [distortion_factor, 1])
         distorted_image = reshape_image(distorted_image, *image.shape) / distortion_factor
+        return distorted_image
     else:
-        distorted_image = image.copy()
+        return image.copy()
+
+def polar_transform(image, inclination=0, phi_range=None):
+    '''Transforms image from (x, y) to (r, phi) coordinates. phi=0 is to the right and goes counter-clockwise.'''
+    distorted_image = distort_image(image, inclination=inclination)
 
     from skimage.transform import warp_polar
     y, x = distorted_image.shape
@@ -313,13 +320,17 @@ def polar_transform(image, inclination=0, phi_range=None):
 
 def polar_transform_profile(image, inclination=0, mode='radial_profile', phi_range=None):
     '''Gives the azimuthally averaged or radially averaged profile using the polar transformed image.'''
-    transformed_image, mask_out = polar_transform(image, inclination=inclination, phi_range=phi_range)
+    if np.any(phi_range):
+        transformed_image, mask_out = polar_transform(image, inclination=inclination, phi_range=phi_range)
 
-    if mode == 'radial_profile':
-        not_nan_rows = [irow for irow in range(len(transformed_image)) if not np.any(np.isnan(transformed_image[irow]))]
-        transformed_image = transformed_image[not_nan_rows]
+        if mode == 'radial_profile':
+            include_rows = [irow for irow in range(len(mask_out)) if not np.any(mask_out[irow])]
+            transformed_image = transformed_image[include_rows]
+        else:
+            transformed_image[mask_out] = np.nan
+
     else:
-        transformed_image[mask_out] = np.nan
+        transformed_image = polar_transform(image, inclination=inclination, phi_range=phi_range)
 
     if mode == 'radial_profile':
         return transformed_image.mean(0)
