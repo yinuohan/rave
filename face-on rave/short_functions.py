@@ -388,7 +388,8 @@ def calibrate_noise(kernel, fwhm_x, fwhm_y, verbose=False, plotit=True):
     for noise_per_pixel in noise_per_pixel_vals:
         noise = np.random.normal(0, noise_per_pixel, test_shape)
         noise = convolve(noise, kernel)
-        noise_per_beam_conv = measure_noise(noise, fwhm_x, fwhm_y, verbose=verbose)
+        #noise_per_beam_conv = measure_noise(noise, fwhm_x, fwhm_y, verbose=verbose)
+        noise_per_beam_conv = np.std(noise * calculate_beam_area(fwhm_x, fwhm_y))
         noise_per_beam_conv_vals.append(noise_per_beam_conv)
 
     slope, intercept = np.polyfit(noise_per_pixel_vals, noise_per_beam_conv_vals, deg=1)

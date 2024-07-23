@@ -752,6 +752,7 @@ class RadialProfile():
             
         # Interpolate points
         self.rnew, INTERPOLATED = interpolate(self.MTXRATIOS, self.R_BOUNDS)
+        self.INTERPOLATED = INTERPOLATED
         
         # *** Store profile ***
         self.profile = handlelr(np.median)(INTERPOLATED, axis=0)
@@ -922,6 +923,7 @@ class RadialProfile():
             
         # Interpolate points
         self.rnew, INTERPOLATED = interpolate(self.MTXRATIOS, self.R_BOUNDS)
+        self.INTERPOLATED = INTERPOLATED
         
         # *** Store profile ***
         self.profile = handlelr(np.median)(INTERPOLATED, axis=0)

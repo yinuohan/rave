@@ -164,20 +164,31 @@ def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0, feature_regio
 
     #width_floor = max(0.1 * range_pixels / nrings, 1)
     #width_ceil = 5 * range_pixels / nrings
+    '''
+    while True:
+        r_bounds = np.linspace(left_edge_pixel, right_edge_pixel, nrings+1)
+        gap = (right_edge_pixel - left_edge_pixel) / nrings
+        r_bounds[1:-1] += np.random.normal(0, gap, nrings-1)
+        r_bounds = np.sort(r_bounds)
+        diff = np.diff(r_bounds)
+        if np.all(diff > 1) and r_bounds[0] == left_edge_pixel and r_bounds[-1] == right_edge_pixel:
+            break
+    '''
     
     if min_width == None:
         if nrings <= 20 and range_pixels/nrings >= 5:
             width_floor = max(0.3 * range_pixels / nrings, 1)
             width_ceil = 2 * range_pixels / nrings
         elif nrings <= 30:
-            width_floor = max(0.3 * range_pixels / nrings, 1)
-            width_ceil = 3 * range_pixels / nrings
+            width_floor = max(0.2 * range_pixels / nrings, 1)
+            width_ceil = 2.5 * range_pixels / nrings
         else:
             width_floor = 1
             width_ceil = 3 * range_pixels / nrings
     else:
         width_floor = min_width
         width_ceil = np.inf
+    
     
     while True:
         r_bounds = np.random.uniform(left_edge_pixel, right_edge_pixel, nrings-1)
@@ -186,6 +197,7 @@ def generate_r_bounds(nrings, right_edge_pixel, left_edge_pixel=0, feature_regio
         r_widths = np.diff(r_bounds)
         if len(np.where((r_widths > width_ceil)|(r_widths < width_floor))[0]) == 0:
             break
+    
     
     '''
     if np.any(feature_region):
