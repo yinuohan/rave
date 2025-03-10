@@ -7,7 +7,7 @@ Given an input image of an optically thin disk, Rave recovers the face-on surfac
 ## Publication
 [This paper](https://arxiv.org/pdf/2202.04475.pdf) provides details of the algorithm and its performance for edge-on disks. 
 
-[This paper](https://arxiv.org/abs/2502.08584.pdf) provides details on the updated algorithm optimised for more face-on disks. 
+[This paper](https://arxiv.org/pdf/2502.08584.pdf) provides details on the updated algorithm optimised for more face-on disks. 
 
 ## Installation
 Rave is available at [pypi.org/project/rave](https://pypi.org/project/rave/). We recommend installing via
