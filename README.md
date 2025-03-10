@@ -1,13 +1,13 @@
 # Rave
 
-Rave is a Python package that models the structure of debris disks nonparametrically from images. 
+Rave is a Python package that models the structure of astrophysical disks nonparametrically from images. 
 
-Given an input image of a highly inclined (edge-on, or nearly edge-on) debris disk, Rave recovers the face-on surface brightness as a function of radius and vertical height of the disk as a function of radius. 
-
-An update containing optimization for low-inclination disks will be available with an upcoming release and associated publication later this year. 
+Given an input image of an optically thin disk, Rave recovers the face-on surface brightness as a function of radius and vertical height of the disk as a function of radius if sufficiently edge-on. 
 
 ## Publication
-[This paper](https://arxiv.org/pdf/2202.04475.pdf) provides details of the algorithm and its performance. 
+[This paper](https://arxiv.org/pdf/2202.04475.pdf) provides details of the algorithm and its performance for edge-on disks. 
+
+[This paper](https://arxiv.org/abs/2502.08584.pdf) provides details on the updated algorithm optimised for more face-on disks. 
 
 ## Installation
 Rave is available at [pypi.org/project/rave](https://pypi.org/project/rave/). We recommend installing via
