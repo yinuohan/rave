@@ -10,8 +10,10 @@ from scipy.interpolate import interp1d, interp2d
 
 ## Convolution
 from scipy.ndimage import convolve as scipy_convolve
+from scipy.signal import fftconvolve
 def convolve(a, b):
-    return scipy_convolve(a, b, mode='constant', cval=0.0)
+    #return scipy_convolve(a, b, mode='constant', cval=0.0)
+    return fftconvolve(a, b, mode='same')
 
 ## Matplotlib GUI
 import matplotlib
